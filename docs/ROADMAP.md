@@ -109,12 +109,14 @@ Real-time talking points and suggestions based on the live conversation.
 
 ## Future Ideas
 
+- **Auto-stop call detection** — detect when call ends (see DECISIONS.md for approaches)
 - **Call recording** — save full audio for review/coaching
-- **Post-call summary** — auto-generate call notes for CRM
-- **Auto-CRM update** — push call notes/next steps back to Vault
-- **Team analytics** — aggregate insights across reps
-- **Knowledge base integration** — plug in sales playbook for more specific coaching
-- **Multi-language** — support calls in other languages
-- **Suggested email follow-up** — draft a follow-up email based on the call
-- **Smart coaching triggers** — trigger immediately on objection keywords instead of waiting for 2-turn cadence
+- **Suggested follow-up email** — draft a follow-up email based on the call transcript
+- **Team analytics** — aggregate coaching data across reps (common objections, MEDDPICC gaps)
+- **Call scoring & MEDDPICC tracker** — live qualification score during the call
+- **Coaching replay** — review past calls with coaching overlaid
+- **Pre-call briefing** — show a 30-second summary before the call starts
+- **Talk-time ratio** — track rep vs prospect talk time, nudge if rep is dominating
+- **Multi-language** — support calls in other languages (Deepgram nova-3 supports many)
+- **Calendar auto-briefing notifications** — macOS notification 15 min before a scheduled call
 - **Twilio in-browser integration** — build coaching directly into Vault for dialer calls (see FUTURE_INTEGRATION.md)

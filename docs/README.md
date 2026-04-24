@@ -20,6 +20,9 @@ Built on top of [Pickle Glass](https://github.com/meeoh/glass), stripped of thir
 | HUD hidden until call starts | ✅ Working |
 | Draggable listen/insights pane | ✅ Working |
 | Google auth token persistence | ✅ Working |
+| Sales knowledge base (16 files, conversation-aware) | ✅ Working |
+| Smart coaching triggers (instant on objections) | ✅ Working |
+| Post-call AI summary → CRM | ✅ Working |
 | Auto-stop listening when call ends | 🔜 Planned |
 | Invisible to screen share | ✅ Working (inherited) |
 
@@ -44,12 +47,10 @@ npx electron .
 After first setup, to relaunch just:
 ```bash
 export PATH="/opt/homebrew/opt/node@20/bin:$PATH"
-cd ~/Projects/glass && \
-  GOOGLE_CLIENT_ID="your-client-id.apps.googleusercontent.com" \
-  GOOGLE_CLIENT_SECRET="your-client-secret" \
-  GLASS_REP_EMAIL="rep@shopify.com" \
-  npx electron .
+cd ~/Projects/glass && npx electron .
 ```
+
+Environment variables are loaded from `.env` automatically (via dotenv).
 
 ### Environment Variables
 
@@ -60,7 +61,7 @@ cd ~/Projects/glass && \
 | `GOOGLE_CLIENT_ID` | For calendar | Google OAuth2 client ID |
 | `GOOGLE_CLIENT_SECRET` | For calendar | Google OAuth2 client secret |
 | `GLASS_REP_EMAIL` | For Vault active call | The sales rep's Shopify email (used to check if they're on a dialer call) |
-| `VAULT_URL` | No | Vault base URL (default: `https://u2-2.shop.dev`) |
+| `VAULT_URL` | No | Vault base URL (default: `https://u2.shop.dev`) |
 | `VAULT_API_TOKEN` | No | Vault API token (default: `glass-dev-token`) |
 
 **Important:** If the app doesn't open, kill any existing Electron processes first:
@@ -106,15 +107,26 @@ Once matched, the CRM side panel auto-populates and the LLM coaching prompt incl
 4. Transcriptions appear live in the UI, labeled "Me" and "Them"
 5. Every 2 transcript turns, **GPT-4.1** analyzes the conversation and provides coaching (Say This / Ask This)
 
+### Sales Knowledge Base
+Glass includes 16 knowledge files covering Shopify product knowledge, competitive positioning, MEDDPICC qualification, and regional coaching. Knowledge is dynamically selected based on CRM contact data (industry, region) and conversation keywords (e.g., prospect mentions "BigCommerce" → competitive knowledge loaded).
+
+### Smart Coaching Triggers
+In addition to the regular 2-turn coaching cadence, Glass detects high-signal moments and triggers coaching immediately:
+- Objections (price, competitor, timing, authority)
+- Buying signals (pricing questions, next steps, proposals)
+- Risk/concern signals
+
+### Post-Call Summary
+When you press Done, Glass generates a concise AI summary and pushes it to Vault CRM:
+- Dialer calls: note attached to the `CRM::Call` record
+- Google Meet calls: matched via calendar event ID against existing `CRM::Call`
+- Other calls: creates a Meeting activity with the summary
+- All notes prefixed with 🤖 AI Summary
+
 ### Stop vs Done
 - **Stop** — ends listening, keeps HUD visible (review transcript/insights)
-- **Done** — hides the HUD entirely, clears matched contact, resets for next call
-
-### Ask Feature
-Press `Cmd + Enter` to ask the AI a question. It takes a screenshot of your current screen and sends it along with your question and recent conversation to GPT-4.1 for a contextual answer.
+- **Done** — generates AI summary → pushes to CRM → hides HUD → resets for next call
 
 ## Keyboard Shortcuts
 
-- `Cmd + \` — show/hide the app
-- `Cmd + Enter` — ask AI using screen + audio context
-- `Cmd + Arrows` — move window position
+- `Cmd + \` — show/hide the HUD

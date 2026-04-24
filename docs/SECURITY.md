@@ -29,34 +29,24 @@ The upstream Glass codebase was audited before modification. **No malicious beha
 | `localhost:51989` | Google OAuth callback | Receives auth code redirect (temporary, local only) |
 | `localhost` (dynamic ports) | Internal web dashboard | Nothing external |
 
-### Hardcoded Credentials
+### Credentials
 
-The following are hardcoded in the source (since this is an internal tool):
-
-| Key | Location | Purpose |
-|---|---|---|
-| Shopify proxy token | `openai.js`, `modelStateService.js` | LLM access via Shopify AI proxy |
-| Deepgram API key | `modelStateService.js` | Real-time STT |
-| Vault API token | `vaultService.js`, `contactMatchService.js` | CRM data access (`glass-dev-token`) |
-
-The following are passed via environment variables (not in source):
+All sensitive credentials are passed via environment variables (`.env` file, gitignored):
 
 | Key | Purpose |
 |---|---|
+| `SHOPIFY_PROXY_TOKEN` | Shopify AI proxy token for LLM access |
+| `DEEPGRAM_API_KEY` | Deepgram API key for real-time STT |
 | `GOOGLE_CLIENT_ID` | Google OAuth2 client ID |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth2 client secret |
 | `GLASS_REP_EMAIL` | Rep's Shopify email for Vault active call lookup |
 
+The only hardcoded credential is `glass-dev-token` in `vaultService.js` and `contactMatchService.js` — a static dev token for the Vault API, overridable via `VAULT_API_TOKEN` env var.
+
 **Google OAuth tokens** are stored in SQLite (`google_auth` table) — access token, refresh token, user profile. Cleared on sign out.
 
-**Before distributing to sales reps**, consider moving all hardcoded keys to environment variables or a secure config mechanism.
+### Dead Code
 
-### Dead Code (disconnected but on disk)
-
-These files still exist but nothing imports them:
-- `src/features/common/services/firebaseClient.js`
-- `src/features/common/services/migrationService.js`
-- `src/features/common/repositories/firestoreConverter.js`
-- All `firebase.repository.js` files in each repository directory
-
-Consider deleting these before distribution to keep the codebase clean.
+All Firebase-related dead code has been deleted:
+- `firebaseClient.js`, `migrationService.js`, `firestoreConverter.js`, and all `firebase.repository.js` files removed.
+- `pickleglass_web/utils/firebase.ts` credentials stripped (empty strings).
