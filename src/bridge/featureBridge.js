@@ -11,7 +11,11 @@ const localAIManager = require('../features/common/services/localAIManager');
 const askService = require('../features/ask/askService');
 const listenService = require('../features/listen/listenService');
 const permissionService = require('../features/common/services/permissionService');
-const encryptionService = require('../features/common/services/encryptionService');
+const vaultService = require('../features/vault/vaultService');
+const googleAuthService = require('../features/googleAuth/googleAuthService');
+const calendarService = require('../features/calendar/calendarService');
+const contactMatchService = require('../features/contactMatch/contactMatchService');
+const postCallSummaryService = require('../features/listen/summary/postCallSummaryService');
 
 module.exports = {
   // Renderer로부터의 요청을 수신하고 서비스로 전달
@@ -42,16 +46,8 @@ module.exports = {
     ipcMain.handle('open-system-preferences', async (event, section) => await permissionService.openSystemPreferences(section));
     ipcMain.handle('mark-keychain-completed', async () => await permissionService.markKeychainCompleted());
     ipcMain.handle('check-keychain-completed', async () => await permissionService.checkKeychainCompleted());
-    ipcMain.handle('initialize-encryption-key', async () => {
-        const userId = authService.getCurrentUserId();
-        await encryptionService.initializeKey(userId);
-        return { success: true };
-    });
-
     // User/Auth
     ipcMain.handle('get-current-user', () => authService.getCurrentUser());
-    ipcMain.handle('start-firebase-auth', async () => await authService.startFirebaseAuthFlow());
-    ipcMain.handle('firebase-logout', async () => await authService.signOut());
 
     // App
     ipcMain.handle('quit-application', () => app.quit());
@@ -88,10 +84,10 @@ module.exports = {
     ipcMain.handle('listen:sendMicAudio', async (event, { data, mimeType }) => await listenService.handleSendMicAudioContent(data, mimeType));
     ipcMain.handle('listen:sendSystemAudio', async (event, { data, mimeType }) => {
         const result = await listenService.sttService.sendSystemAudioContent(data, mimeType);
-        if(result.success) {
+        if(result && result.success) {
             listenService.sendToRenderer('system-audio-data', { data });
         }
-        return result;
+        return result || { success: false };
     });
     ipcMain.handle('listen:startMacosSystemAudio', async () => await listenService.handleStartMacosAudio());
     ipcMain.handle('listen:stopMacosSystemAudio', async () => await listenService.handleStopMacosAudio());
@@ -100,7 +96,76 @@ module.exports = {
     ipcMain.handle('listen:changeSession', async (event, listenButtonText) => {
       console.log('[FeatureBridge] listen:changeSession from mainheader', listenButtonText);
       try {
+        const callDetectionService = require('../features/callDetection/callDetectionService');
+        const { notifyListenStateChanged, showHUD, hideHUD } = require('../window/windowManager');
+        const isStarting = listenButtonText === 'Listen';
+
+        // Grab conversation history BEFORE handleListenRequest clears it
+        // (Stop calls closeSession which resets history)
+        const conversationHistory = !isStarting
+          ? [...(listenService.summaryService?.getConversationHistory?.() || [])]
+          : [];
+
         await listenService.handleListenRequest(listenButtonText);
+        // Sync call detection state with manual listen start/stop
+        callDetectionService.setListening(isStarting);
+        notifyListenStateChanged(isStarting);
+        if (isStarting) {
+          showHUD();
+          // Auto-match on manual listen start too
+          contactMatchService.autoMatch().catch(err => {
+            console.error('[FeatureBridge] Auto-match error:', err.message);
+          });
+        } else if (listenButtonText === 'Stop') {
+          // Stop — stash conversation history for when Done is pressed later
+          if (conversationHistory.length > 0) {
+            listenService._stashedConversationHistory = conversationHistory;
+            console.log(`[FeatureBridge] Stashed ${conversationHistory.length} conversation turns for post-call summary`);
+          }
+        } else if (listenButtonText === 'Done') {
+          // Done = call is over — generate summary, push to CRM, then clean up
+          // Use stashed history from Stop, or current history if available
+          const finalHistory = conversationHistory.length > 0 ? conversationHistory : (listenService._stashedConversationHistory || []);
+          
+          // Capture contact/match data NOW before we clear it
+          const calendarService = require('../features/calendar/calendarService');
+          const currentEvents = calendarService.getCurrentEvents();
+          const calendarEventId = currentEvents.length > 0 ? currentEvents[0].id : null;
+
+          const summaryOptions = {
+            callId: contactMatchService._lastCallId || null,
+            matchSource: contactMatchService.getMatchSource(),
+            contactData: vaultService.getCurrentContact(),
+            repEmail: contactMatchService.getRepEmail(),
+            calendarEventId: calendarEventId,
+            durationSeconds: null,
+          };
+
+          // Generate and push summary in the background (don't block the UI)
+          console.log(`[FeatureBridge] Generating post-call summary from ${finalHistory.length} turns`);
+          postCallSummaryService.generateAndPush(finalHistory, summaryOptions).then(result => {
+            if (result.success) {
+              console.log('[FeatureBridge] Post-call summary generated and pushed');
+              // Notify all windows
+              BrowserWindow.getAllWindows().forEach(win => {
+                if (win && !win.isDestroyed()) {
+                  win.webContents.send('glass:post-call-summary', result);
+                }
+              });
+            }
+          }).catch(err => {
+            console.error('[FeatureBridge] Post-call summary failed:', err.message);
+          });
+
+          hideHUD();
+          contactMatchService.clearMatch();
+          vaultService.clearContact();
+          listenService._stashedConversationHistory = null;
+        } else {
+          // Stop = end listening but keep HUD visible (user can review transcript)
+          contactMatchService.clearMatch();
+          vaultService.clearContact();
+        }
         return { success: true };
       } catch (error) {
         console.error('[FeatureBridge] listen:changeSession failed', error.message);
@@ -227,6 +292,116 @@ module.exports = {
     // 전체 상태 조회
     ipcMain.handle('localai:get-all-states', async (event) => {
       return await localAIManager.getAllServiceStates();
+    });
+
+    // Vault CRM
+    ipcMain.handle('vault:lookup-contact', async (e, { email, name }) => {
+      try {
+        const data = await vaultService.lookupContact({ email, name });
+        if (!data) return { success: false, error: 'Contact not found' };
+        return { success: true, data, highlights: vaultService.buildHighlights() };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+    ipcMain.handle('vault:get-current-contact', () => {
+      return {
+        data: vaultService.getCurrentContact(),
+        highlights: vaultService.buildHighlights(),
+      };
+    });
+    ipcMain.handle('vault:clear-contact', () => {
+      vaultService.clearContact();
+      return { success: true };
+    });
+
+    // Broadcast contact changes to all windows
+    vaultService.onContactChanged((data) => {
+      const highlights = vaultService.buildHighlights();
+      BrowserWindow.getAllWindows().forEach(win => {
+        if (win && !win.isDestroyed()) {
+          win.webContents.send('vault:contact-changed', { data, highlights });
+        }
+      });
+    });
+
+    // ─── Glass Main Window: Google Auth + Calendar + Contact Matching ───
+
+    // Google Auth
+    ipcMain.handle('glass:authorize-google', async () => {
+      try {
+        const profile = await googleAuthService.authorize();
+        // Start calendar polling after auth
+        calendarService.start();
+        return { success: true, profile };
+      } catch (err) {
+        console.error('[FeatureBridge] Google auth failed:', err.message);
+        return { success: false, error: err.message };
+      }
+    });
+    ipcMain.handle('glass:sign-out-google', () => {
+      googleAuthService.signOut();
+      calendarService.stop();
+      return { success: true };
+    });
+    ipcMain.handle('glass:get-google-profile', () => {
+      return googleAuthService.getUserProfile();
+    });
+
+    // Calendar
+    ipcMain.handle('glass:refresh-calendar', async () => {
+      await calendarService.refresh();
+      return { success: true, events: calendarService.getTodayEvents() };
+    });
+    ipcMain.handle('glass:get-today-events', () => {
+      return calendarService.getTodayEvents();
+    });
+
+    // Initial state for main window
+    ipcMain.handle('glass:get-initial-state', async () => {
+      return {
+        isAuthorized: googleAuthService.isAuthorized(),
+        userProfile: googleAuthService.getUserProfile(),
+        events: calendarService.getTodayEvents(),
+        isListening: listenService.isSessionActive(),
+        matchResult: contactMatchService.getMatchSource() ? {
+          matched: true,
+          source: contactMatchService.getMatchSource(),
+          contact: vaultService.getCurrentContact()?.contact,
+        } : null,
+      };
+    });
+
+    // Broadcast Google auth changes to all windows
+    googleAuthService.on('auth-changed', (profile) => {
+      // Auto-set rep email for Vault lookups when Google auth completes,
+      // but only if no explicit rep email was configured via env var
+      if (profile.email && !process.env.GLASS_REP_EMAIL) {
+        contactMatchService.setRepEmail(profile.email);
+      }
+      BrowserWindow.getAllWindows().forEach(win => {
+        if (win && !win.isDestroyed()) {
+          win.webContents.send('glass:auth-changed', profile);
+        }
+      });
+    });
+
+    // Broadcast calendar event updates to all windows
+    calendarService.on('events-updated', (events) => {
+      BrowserWindow.getAllWindows().forEach(win => {
+        if (win && !win.isDestroyed()) {
+          win.webContents.send('glass:events-updated', events);
+        }
+      });
+    });
+
+    // Broadcast contact match results to all windows
+    contactMatchService.on('match-result', (result) => {
+      BrowserWindow.getAllWindows().forEach(win => {
+        if (win && !win.isDestroyed()) {
+          win.webContents.send('glass:match-result', result);
+        }
+      });
     });
 
     console.log('[FeatureBridge] Initialized with all feature handlers.');

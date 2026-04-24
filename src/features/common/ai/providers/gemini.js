@@ -42,7 +42,7 @@ async function createSTT({ apiKey, language = "en-US", callbacks = {}, ...config
 
   const session = await liveClient.live.connect({
 
-    model: 'gemini-live-2.5-flash-preview',
+    model: 'gemini-2.5-flash-native-audio-latest',
     callbacks: {
       ...callbacks,
       onMessage: (msg) => {
@@ -53,14 +53,33 @@ async function createSTT({ apiKey, language = "en-US", callbacks = {}, ...config
     },
 
     config: {
+      responseModalities: ['TEXT'],
       inputAudioTranscription: {},
       speechConfig: { languageCode: lang },
     },
   })
 
+  // Send a small silent audio packet immediately to prevent Gemini from
+  // timing out before the renderer starts sending real mic audio.
+  const silence = Buffer.alloc(24000 * 2 * 0.5).toString('base64'); // 0.5s silence
+  session.sendRealtimeInput({ audio: { data: silence, mimeType: 'audio/pcm;rate=24000' } });
+
+  // Keep sending silence every 3s to keep the session alive until real audio arrives
+  const keepAliveInterval = setInterval(() => {
+    try {
+      const keepAliveSilence = Buffer.alloc(24000 * 2 * 0.1).toString('base64'); // 100ms
+      session.sendRealtimeInput({ audio: { data: keepAliveSilence, mimeType: 'audio/pcm;rate=24000' } });
+    } catch (e) {
+      clearInterval(keepAliveInterval);
+    }
+  }, 3000);
+
   return {
     sendRealtimeInput: async (payload) => session.sendRealtimeInput(payload),
-    close: async () => session.close(),
+    close: async () => {
+      clearInterval(keepAliveInterval);
+      return session.close();
+    },
   }
 }
 

@@ -18,9 +18,43 @@ class ModelStateService extends EventEmitter {
         console.log('[ModelStateService] Initializing one-time setup...');
         await this._initializeEncryption();
         await this._runMigrations();
+        await this._ensureProxyKeySeeded();
         this.setupLocalAIStateSync();
         await this._autoSelectAvailableModels([], true);
         console.log('[ModelStateService] One-time setup complete.');
+    }
+
+    /**
+     * Auto-seed the Shopify proxy API token so the app is preconfigured
+     * and sales reps never need to enter an API key.
+     */
+    async _ensureProxyKeySeeded() {
+        const PROXY_TOKEN = process.env.SHOPIFY_PROXY_TOKEN || '';
+        const DEEPGRAM_KEY = process.env.DEEPGRAM_API_KEY || '';
+
+        // Seed or update OpenAI proxy token for LLM
+        const existingOpenai = await providerSettingsRepository.getByProvider('openai');
+        if (PROXY_TOKEN && (!existingOpenai || !existingOpenai.api_key || existingOpenai.api_key !== PROXY_TOKEN)) {
+            console.log('[ModelStateService] Setting Shopify proxy API token for OpenAI LLM...');
+            await providerSettingsRepository.upsert('openai', {
+                api_key: PROXY_TOKEN,
+                selected_llm_model: 'gpt-4.1',
+            });
+        }
+        await providerSettingsRepository.setActiveProvider('openai', 'llm');
+
+        // Seed or update Deepgram key for STT (real-time WebSocket transcription)
+        const existingDeepgram = await providerSettingsRepository.getByProvider('deepgram');
+        if (DEEPGRAM_KEY && (!existingDeepgram || !existingDeepgram.api_key || existingDeepgram.api_key !== DEEPGRAM_KEY)) {
+            console.log('[ModelStateService] Setting Deepgram API key for STT...');
+            await providerSettingsRepository.upsert('deepgram', {
+                api_key: DEEPGRAM_KEY,
+                selected_stt_model: 'nova-3',
+            });
+        }
+        await providerSettingsRepository.setActiveProvider('deepgram', 'stt');
+
+        console.log('[ModelStateService] API keys seeded (OpenAI proxy for LLM, Gemini for STT).');
     }
 
     async _initializeEncryption() {
@@ -166,57 +200,16 @@ class ModelStateService extends EventEmitter {
         }
     }
     
-    async setFirebaseVirtualKey(virtualKey) {
-        console.log(`[ModelStateService] Setting Firebase virtual key.`);
-
-        // 키를 설정하기 전에, 이전에 openai-glass 키가 있었는지 확인합니다.
-        const previousSettings = await providerSettingsRepository.getByProvider('openai-glass');
-        const wasPreviouslyConfigured = !!previousSettings?.api_key;
-
-        // 항상 새로운 가상 키로 업데이트합니다.
-        await this.setApiKey('openai-glass', virtualKey);
-
-        if (virtualKey) {
-            // 이전에 설정된 적이 없는 경우 (최초 로그인)에만 모델을 강제로 변경합니다.
-            if (!wasPreviouslyConfigured) {
-                console.log('[ModelStateService] First-time setup for openai-glass, setting default models.');
-                const llmModel = PROVIDERS['openai-glass']?.llmModels[0];
-                const sttModel = PROVIDERS['openai-glass']?.sttModels[0];
-                if (llmModel) await this.setSelectedModel('llm', llmModel.id);
-                if (sttModel) await this.setSelectedModel('stt', sttModel.id);
-            } else {
-                console.log('[ModelStateService] openai-glass key updated, but respecting user\'s existing model selection.');
-            }
-        } else {
-            // 로그아웃 시, 현재 활성화된 모델이 openai-glass인 경우에만 다른 모델로 전환합니다.
-            const selected = await this.getSelectedModels();
-            const llmProvider = this.getProviderForModel(selected.llm, 'llm');
-            const sttProvider = this.getProviderForModel(selected.stt, 'stt');
-            
-            const typesToReselect = [];
-            if (llmProvider === 'openai-glass') typesToReselect.push('llm');
-            if (sttProvider === 'openai-glass') typesToReselect.push('stt');
-
-            if (typesToReselect.length > 0) {
-                console.log('[ModelStateService] Logged out, re-selecting models for:', typesToReselect.join(', '));
-                await this._autoSelectAvailableModels(typesToReselect);
-            }
-        }
-    }
-
     async setApiKey(provider, key) {
         console.log(`[ModelStateService] setApiKey for ${provider}`);
         if (!provider) {
             throw new Error('Provider is required');
         }
 
-        // 'openai-glass'는 자체 인증 키를 사용하므로 유효성 검사를 건너뜁니다.
-        if (provider !== 'openai-glass') {
-            const validationResult = await this.validateApiKey(provider, key);
-            if (!validationResult.success) {
-                console.warn(`[ModelStateService] API key validation failed for ${provider}: ${validationResult.error}`);
-                return validationResult;
-            }
+        const validationResult = await this.validateApiKey(provider, key);
+        if (!validationResult.success) {
+            console.warn(`[ModelStateService] API key validation failed for ${provider}: ${validationResult.error}`);
+            return validationResult;
         }
 
         const finalKey = (provider === 'ollama' || provider === 'whisper') ? 'local' : key;
@@ -235,9 +228,7 @@ class ModelStateService extends EventEmitter {
         const allSettings = await providerSettingsRepository.getAll();
         const apiKeys = {};
         allSettings.forEach(s => {
-            if (s.provider !== 'openai-glass') {
-                apiKeys[s.provider] = s.api_key;
-            }
+            apiKeys[s.provider] = s.api_key;
         });
         return apiKeys;
     }
@@ -255,18 +246,9 @@ class ModelStateService extends EventEmitter {
     }
 
     /**
-     * 사용자가 Firebase에 로그인했는지 확인합니다.
-     */
-    isLoggedInWithFirebase() {
-        return this.authService.getCurrentUser().isLoggedIn;
-    }
-
-    /**
      * 유효한 API 키가 하나라도 설정되어 있는지 확인합니다.
      */
     async hasValidApiKey() {
-        if (this.isLoggedInWithFirebase()) return true;
-        
         const allSettings = await providerSettingsRepository.getAll();
         return allSettings.some(s => s.api_key && s.api_key.trim().length > 0);
     }
@@ -413,7 +395,6 @@ class ModelStateService extends EventEmitter {
     }
 
     async areProvidersConfigured() {
-        if (this.isLoggedInWithFirebase()) return true;
         const allSettings = await providerSettingsRepository.getAll();
         const apiKeyMap = {};
         allSettings.forEach(s => apiKeyMap[s.provider] = s.api_key);

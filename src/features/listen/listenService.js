@@ -12,6 +12,7 @@ class ListenService {
         this.summaryService = new SummaryService();
         this.currentSessionId = null;
         this.isInitializingSession = false;
+        this.lastThemTranscriptTime = null;
 
         this.setupServiceCallbacks();
         console.log('[ListenService] Service instance created.');
@@ -21,6 +22,9 @@ class ListenService {
         // STT service callbacks
         this.sttService.setCallbacks({
             onTranscriptionComplete: (speaker, text) => {
+                if (speaker === 'Them' || speaker === 'them') {
+                    this.lastThemTranscriptTime = Date.now();
+                }
                 this.handleTranscriptionComplete(speaker, text);
             },
             onStatusUpdate: (status) => {
@@ -144,6 +148,7 @@ class ListenService {
             
             // Reset conversation history
             this.summaryService.resetConversationHistory();
+            this.lastThemTranscriptTime = null;
 
             console.log('New conversation session started:', this.currentSessionId);
             return true;

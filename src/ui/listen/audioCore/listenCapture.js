@@ -428,27 +428,28 @@ async function startCapture(screenshotIntervalSeconds = 5, imageQuality = 'mediu
                 throw new Error('STT sessions not initialized - please wait for initialization to complete');
             }
 
-            // On macOS, use SystemAudioDump for audio and getDisplayMedia for screen
-            console.log('Starting macOS capture with SystemAudioDump...');
+            // On macOS, use Electron native loopback for system audio capture
+            console.log('Starting macOS capture with Electron loopback...');
 
-            // Start macOS audio capture
-            const audioResult = await window.api.listenCapture.startMacosSystemAudio();
-            if (!audioResult.success) {
-                console.warn('[listenCapture] macOS audio start failed:', audioResult.error);
-
-                // 이미 실행 중 → stop 후 재시도
-                if (audioResult.error === 'already_running') {
-                    await window.api.listenCapture.stopMacosSystemAudio();
-                    await new Promise(r => setTimeout(r, 500));
-                    const retry = await window.api.listenCapture.startMacosSystemAudio();
-                    if (!retry.success) {
-                        throw new Error('Retry failed: ' + retry.error);
-                    }
+            try {
+                mediaStream = await navigator.mediaDevices.getDisplayMedia({
+                    video: true,
+                    audio: true,
+                });
+                const audioTracks = mediaStream.getAudioTracks();
+                if (audioTracks.length > 0) {
+                    console.log('✅ macOS system audio via Electron loopback (' + audioTracks.length + ' tracks)');
+                    const { context, processor } = setupSystemAudioProcessing(mediaStream);
+                    systemAudioContext = context;
+                    systemAudioProcessor = processor;
                 } else {
-                    throw new Error('Failed to start macOS audio capture: ' + audioResult.error);
+                    console.warn('[listenCapture] No audio track in loopback stream');
                 }
+            } catch (loopbackErr) {
+                console.warn('[listenCapture] Electron loopback failed:', loopbackErr.message);
             }
 
+            // Microphone capture
             try {
                 micMediaStream = await navigator.mediaDevices.getUserMedia({
                     audio: {
@@ -468,9 +469,8 @@ async function startCapture(screenshotIntervalSeconds = 5, imageQuality = 'mediu
             } catch (micErr) {
                 console.warn('Failed to get microphone on macOS:', micErr);
             }
-            ////////// for index & subjects //////////
 
-            console.log('macOS screen capture started - audio handled by SystemAudioDump');
+            console.log('macOS capture started');
         } else if (isLinux) {
 
             const sessionActive = await window.api.listenCapture.isSessionActive();
@@ -614,9 +614,9 @@ function stopCapture() {
 // Exports & global registration
 // ---------------------------
 module.exports = {
-    getAec,          // 새로 만든 초기화 함수
-    runAecSync,      // sync 버전
-    disposeAec,      // 필요시 Rust 객체 파괴
+    getAec,
+    runAecSync,
+    disposeAec,
     startCapture,
     stopCapture,
     isLinux,

@@ -3,8 +3,16 @@ import { html, css, LitElement } from '../../assets/lit-core-2.7.4.min.js';
 export class SttView extends LitElement {
     static styles = css`
         :host {
-            display: block;
+            display: flex;
+            flex-direction: column;
             width: 100%;
+            min-height: 0;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        :host([hidden]) {
+            display: none !important;
         }
 
         /* Inherit font styles from parent */
@@ -15,11 +23,10 @@ export class SttView extends LitElement {
             display: flex;
             flex-direction: column;
             gap: 8px;
-            min-height: 150px;
-            max-height: 600px;
             position: relative;
             z-index: 1;
             flex: 1;
+            min-height: 0;
         }
 
         /* Visibility handled by parent component */
@@ -205,7 +212,7 @@ export class SttView extends LitElement {
 
     render() {
         if (!this.isVisible) {
-            return html`<div style="display: none;"></div>`;
+            return html``;
         }
 
         return html`

@@ -3,8 +3,16 @@ import { html, css, LitElement } from '../../assets/lit-core-2.7.4.min.js';
 export class SummaryView extends LitElement {
     static styles = css`
         :host {
-            display: block;
+            display: flex;
+            flex-direction: column;
             width: 100%;
+            min-height: 0;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        :host([hidden]) {
+            display: none !important;
         }
 
         /* Inherit font styles from parent */
@@ -77,13 +85,23 @@ export class SummaryView extends LitElement {
         }
 
         .insights-container {
-            overflow-y: auto;
             padding: 12px 16px 16px 16px;
             position: relative;
             z-index: 1;
-            min-height: 150px;
-            max-height: 600px;
             flex: 1;
+            overflow-y: auto;
+            min-height: 0;
+        }
+
+        .insights-container::-webkit-scrollbar {
+            width: 5px;
+        }
+        .insights-container::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .insights-container::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
         }
 
         /* Visibility handled by parent component */
@@ -226,7 +244,7 @@ export class SummaryView extends LitElement {
             display: flex;
             align-items: center;
             justify-content: center;
-            height: 100px;
+            flex: 1;
             color: rgba(255, 255, 255, 0.6);
             font-size: 12px;
             font-style: italic;
@@ -451,7 +469,7 @@ export class SummaryView extends LitElement {
 
     render() {
         if (!this.isVisible) {
-            return html`<div style="display: none;"></div>`;
+            return html``;
         }
 
         const data = this.structuredData || {
@@ -467,7 +485,7 @@ export class SummaryView extends LitElement {
                 ${!hasAnyContent
                     ? html`<div class="empty-state">No insights yet...</div>`
                     : html`
-                        <insights-title>Current Summary</insights-title>
+                        <insights-title>🎯 Say This</insights-title>
                         ${data.summary.length > 0
                             ? data.summary
                                   .slice(0, 5)
@@ -505,7 +523,7 @@ export class SummaryView extends LitElement {
                             : ''}
                         ${data.actions.length > 0
                             ? html`
-                                  <insights-title>Actions</insights-title>
+                                  <insights-title>❓ Ask This</insights-title>
                                   ${data.actions
                                       .slice(0, 5)
                                       .map(

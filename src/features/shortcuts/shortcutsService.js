@@ -61,14 +61,10 @@ class ShortcutsService {
         return {
             moveUp: isMac ? 'Cmd+Up' : 'Ctrl+Up',
             moveDown: isMac ? 'Cmd+Down' : 'Ctrl+Down',
-            moveLeft: isMac ? 'Cmd+Left' : 'Ctrl+Left',
-            moveRight: isMac ? 'Cmd+Right' : 'Ctrl+Right',
             toggleVisibility: isMac ? 'Cmd+\\' : 'Ctrl+\\',
             toggleClickThrough: isMac ? 'Cmd+M' : 'Ctrl+M',
-            nextStep: isMac ? 'Cmd+Enter' : 'Ctrl+Enter',
             manualScreenshot: isMac ? 'Cmd+Shift+S' : 'Ctrl+Shift+S',
-            previousResponse: isMac ? 'Cmd+[' : 'Ctrl+[',
-            nextResponse: isMac ? 'Cmd+]' : 'Ctrl+]',
+
             scrollUp: isMac ? 'Cmd+Shift+Up' : 'Ctrl+Shift+Up',
             scrollDown: isMac ? 'Cmd+Shift+Down' : 'Ctrl+Shift+Down',
         };

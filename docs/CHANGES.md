@@ -1,0 +1,201 @@
+# Changes from Original Glass (Pickle)
+
+Everything we modified from the upstream [meeoh/glass](https://github.com/meeoh/glass) fork.
+
+## Removed: Firebase & Cloud Infrastructure
+
+| What | Files Changed |
+|---|---|
+| Firebase auth (login/logout/onAuthStateChanged) | `src/features/common/services/authService.js` — rewritten to local-only |
+| Firebase Firestore (cloud data sync) | All 6 repository `index.js` files — simplified to SQLite-only |
+| `initializeFirebase()` call | `src/index.js` |
+| Firebase auth callback (Cloud Function) | `src/index.js` — `handleFirebaseAuthCallback` removed |
+| Pickle's Vercel endpoint (`/api/virtual_key`) | `src/features/common/services/authService.js` |
+| `setFirebaseVirtualKey` / `isLoggedInWithFirebase` | `src/features/common/services/modelStateService.js` |
+| Firebase auth IPC handlers (`start-firebase-auth`, `firebase-logout`) | `src/bridge/featureBridge.js` |
+| Encryption key init IPC | `src/bridge/featureBridge.js` |
+
+**Note:** The `firebase.repository.js` files, `firebaseClient.js`, `migrationService.js`, and `firestoreConverter.js` still exist on disk but are completely disconnected — nothing imports them.
+
+## Removed: Portkey & openai-glass Provider
+
+| What | Files Changed |
+|---|---|
+| Hardcoded Portkey API key (`gRv2UGRMq6GGLJ8aVEB4e7adIewu`) | `src/features/common/ai/providers/openai.js` — removed from 3 places |
+| `portkey-ai` SDK import | `src/features/common/ai/providers/openai.js` |
+| `openai-glass` provider definition | `src/features/common/ai/factory.js` |
+| `usePortkey` / `portkeyVirtualKey` params | `openai.js`, `sttService.js`, `askService.js`, `summaryService.js` |
+| `-glass` model suffix sanitization | `src/features/common/ai/factory.js` |
+
+## Added: Shopify Proxy for LLM
+
+`src/features/common/ai/providers/openai.js` — hardcoded to route all OpenAI calls through:
+- **REST:** `https://proxy-shopify-ai.local.shop.dev/v1/chat/completions`
+- **Auth:** `Bearer shopify-eyJ...` (Shopify proxy token)
+- All three paths (LLM, streaming LLM, validation) use the proxy
+- The `apiKey` parameter from the system is ignored — proxy token is always used
+
+## Added: Auto-Seeded API Keys
+
+`src/features/common/services/modelStateService.js` — `_ensureProxyKeySeeded()`:
+- Seeds Shopify proxy token as the OpenAI provider API key on first launch
+- Seeds Deepgram API key for STT on first launch
+- Sets OpenAI as active LLM provider, Deepgram as active STT provider
+- Sales reps never need to configure anything
+
+## Added: Auto Call Detection
+
+**New files:**
+- `src/native/MicWatcher.swift` — Swift binary that polls CoreAudio mic state every 2s
+- `src/native/MicWatcher` — compiled binary (auto-compiles on first run, not in git)
+- `src/features/callDetection/callDetectionService.js` — spawns MicWatcher, emits `call-started` event
+
+**Changed files:**
+- `src/index.js` — starts callDetectionService on app launch, wires `call-started` to `listenService.handleListenRequest('Listen')`
+- `src/bridge/featureBridge.js` — syncs manual Listen/Stop with callDetectionService state
+- `.gitignore` — excludes compiled MicWatcher binary
+
+**How it works:** MicWatcher polls `kAudioDevicePropertyDeviceIsRunningSomewhere` every 2s. When any app grabs the mic → Glass auto-starts listening. Auto-stop is not yet implemented (see DECISIONS.md).
+
+## Changed: macOS System Audio Capture
+
+`src/ui/listen/audioCore/listenCapture.js`:
+- **Before:** Used `SystemAudioDump` binary (blocked by Shopify MDM/Gatekeeper)
+- **After:** Uses Electron's native `getDisplayMedia` with `audio: true` for loopback capture
+- macOS prompts user to select a screen to share (this enables audio capture)
+
+## Changed: Repository Adapters (SQLite-only)
+
+All 6 repository `index.js` files simplified — removed Firebase branch, always use SQLite:
+- `src/features/common/repositories/session/index.js`
+- `src/features/common/repositories/user/index.js`
+- `src/features/common/repositories/preset/index.js`
+- `src/features/ask/repositories/index.js`
+- `src/features/listen/stt/repositories/index.js`
+- `src/features/listen/summary/repositories/index.js`
+- `src/features/settings/repositories/index.js`
+
+## Added: EPIPE Crash Fix
+
+`src/index.js` — added `process.stdout/stderr.on('error', () => {})` to prevent crashes when Electron's stdout pipe breaks.
+
+## Added: Google OAuth + Calendar Integration (V3)
+
+**New files:**
+- `src/features/googleAuth/googleAuthService.js` — Google OAuth2 flow using system browser + local HTTP callback server (port 51989). Token persistence in SQLite `google_auth` table.
+- `src/features/calendar/calendarService.js` — polls Google Calendar API every 5 min for today's events. Provides current events (±5 min buffer) and external attendee emails.
+
+**Changed files:**
+- `src/index.js` — initializes Google auth on startup, restores tokens from SQLite, starts calendar polling if authorized
+- `src/bridge/featureBridge.js` — added IPC handlers for `glass:authorize-google`, `glass:sign-out-google`, `glass:refresh-calendar`, `glass:get-initial-state`
+- `src/preload.js` — added `glass` namespace with auth, calendar, listen state, and match result IPC channels
+
+**Environment variables:**
+- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — Google OAuth2 credentials
+- `GLASS_REP_EMAIL` — rep's Shopify email for Vault active call lookups
+
+## Added: Contact Auto-Matching (V3)
+
+**New files:**
+- `src/features/contactMatch/contactMatchService.js` — orchestrates two parallel matching methods on call start
+
+**Method 1 — Vault Active Call API:**
+- Hits `GET /crm/api/active_call?user_email=<rep_email>` to check if the rep is on a Twilio dialer call
+- Returns full contact/account payload if active call found
+- Rep email from `GLASS_REP_EMAIL` env var (priority) or Google auth email
+
+**Method 2 — Calendar Matching:**
+- Gets external attendee emails from calendar events happening now (±5 min)
+- Tries each email against `GET /crm/api/contacts/lookup?email=...`
+- First Vault hit wins
+
+**Vault takes precedence.** Calendar is fallback. If neither matches, manual entry still works.
+
+**Changed files:**
+- `src/bridge/featureBridge.js` — triggers auto-match on listen start (auto or manual), clears match on Done
+- `src/index.js` — wires call-started event to auto-match
+- `src/ui/listen/ListenView.js` — listens for `vault:contact-changed` to auto-populate CRM side panel
+
+## Added: Vault Active Call API Endpoint (u2-2)
+
+**New files (on u2-2 worktree, branch `glass-contact-api`):**
+- `engines/crm/app/controllers/crm/api/active_calls_controller.rb` — `GET /crm/api/active_call?user_email=...`
+- `engines/crm/app/controllers/crm/api/concerns/contact_serialization.rb` — shared serializers extracted from contacts controller
+
+**Changed files:**
+- `engines/crm/config/routes.rb` — added `get "active_call"` route
+- `engines/crm/app/controllers/crm/api/contacts_controller.rb` — refactored to use shared serialization concern
+
+## Added: Main App Window (V3)
+
+**New files:**
+- `src/ui/main/main.html` — standalone app window (420×640, dark UI) with Google auth card, today's meetings list, call status banner, match result display
+
+**Changed files:**
+- `src/window/windowManager.js` — added `createMainAppWindow()`, `showHUD()`, `hideHUD()`, `showMainAppWindow()`, `notifyListenStateChanged()`. HUD header now starts hidden (`show: false`). Listen window tracks user drags to prevent snap-back.
+- `src/index.js` — creates main app window on launch, shows HUD on call detection, dock icon click shows main window
+
+## Changed: HUD Behavior (V3)
+
+- HUD (header + listen + ask + settings windows) now starts **hidden**
+- Shows automatically when MicWatcher detects a call (mic goes active)
+- **Stop** — ends listening, keeps HUD visible for review
+- **Done** — hides HUD entirely, clears contact match
+- Listen pane is now **draggable** (drag handle pill at top) and stays where the user puts it
+
+## Added: Sales Knowledge Base (V3)
+
+**New files:**
+- `src/features/common/prompts/knowledgeLoader.js` — loads knowledge files dynamically based on three signals:
+  1. CRM contact industry/vertical → loads matching vertical knowledge
+  2. CRM contact region → loads matching regional coaching context
+  3. Conversation transcript keywords → scanned every 2 turns, triggers additional knowledge (e.g., prospect mentions "BigCommerce" → competitive proof points loaded)
+- `src/features/common/prompts/knowledge/` — 16 markdown files:
+  - **Core (always loaded):** meddpicc.md, shopify_competitive.md, plus.md, payments.md, pos.md, unified.md
+  - **Verticals:** b2b.md, capital.md, consumer_goods.md, emerging.md, food_bev.md, lifestyle.md, manufacturing.md
+  - **Regional:** region_emea.md, region_amer.md, region_apac.md
+
+**Changed files:**
+- `src/features/listen/summary/summaryService.js` — injects knowledge context into the coaching system prompt alongside CRM data and conversation transcript
+
+**Knowledge sourced from:** [meddpicc-sales-coach](https://github.com/shopify-playground/meddpicc-sales-coach) repo (coaching-engine.js + knowledge/*.js)
+
+**To add new knowledge:** Drop a `.md` file in `src/features/common/prompts/knowledge/` and add keyword triggers to `CONVERSATION_TRIGGERS` in `knowledgeLoader.js`.
+
+## Added: Post-Call Summary + CRM Push (V3)
+
+**New files:**
+- `src/features/listen/summary/postCallSummaryService.js` — generates a concise 3-sentence summary via GPT-4.1 on Done, pushes to Vault CRM
+
+**Vault endpoint:** `POST /crm/api/call_summary`
+- Dialer calls (`call_id` provided): attaches note to existing `CRM::Call`
+- Google Meet calls (`calendar_event_id` provided): matches against `CRM::Call` where `source=google_meet` and `external_id LIKE '{event_id}%'`, attaches note to that call
+- Fallback: creates a `CRM::Activity` (type: Meeting) + note
+- All notes prefixed with `🤖 AI Summary:`
+
+**Changed files:**
+- `src/bridge/featureBridge.js` — captures conversation history on Stop (stashes before reset), triggers summary on Done with pre-captured contact/match/calendar data
+- `src/features/contactMatch/contactMatchService.js` — stores `_lastCallId` from Vault active call match
+
+**Conversation history race condition fix:** Stop calls `closeSession()` which resets conversation history. The bridge now captures history on Stop and stashes it for Done to use.
+
+## Added: Smart Coaching Triggers (V3)
+
+**Changed files:**
+- `src/features/listen/summary/summaryService.js` — added immediate trigger detection for high-signal moments
+
+**6 signal types detected:**
+- Price objection: "too expensive", "over budget", "can't afford", etc.
+- Competitor/status quo: "already using", "current vendor", "happy with our current", etc.
+- Timing: "not the right time", "maybe next quarter", "let me think about it", etc.
+- Authority: "need to talk to my boss", "not my decision", "committee decision", etc.
+- Buying signal: "what's the pricing", "how do we get started", "send a proposal", etc.
+- Risk/concern: "seems risky", "too complex", "what if it doesn't work", etc.
+
+Pattern-matched against ~60 phrases from prospect speech. Fires immediately instead of waiting for the 2-turn cadence. 15-second debounce prevents spamming.
+
+## Changed: Calendar Attendee Filtering (V3)
+
+- Only the rep's own emails are excluded from attendee matching
+- All other attendees are candidates, including `@shopify.com` addresses
+- Previous behavior excluded all `@shopify.com` emails, which missed prospects with Shopify accounts

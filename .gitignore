@@ -113,3 +113,6 @@ data/*.db-wal
 out/
 dist/
 build/ 
+# Compiled native binaries (rebuild with: swiftc -O -o src/native/MicWatcher src/native/MicWatcher.swift -framework CoreAudio -framework Foundation)
+src/native/MicWatcher
+!src/native/MicWatcher.swift

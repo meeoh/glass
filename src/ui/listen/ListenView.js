@@ -6,7 +6,8 @@ export class ListenView extends LitElement {
     static styles = css`
         :host {
             display: block;
-            width: 400px;
+            width: 100%;
+            height: 100%;
             transform: translate3d(0, 0, 0);
             backface-visibility: hidden;
             transition: transform 0.2s cubic-bezier(0.23, 1, 0.32, 1), opacity 0.2s ease-out;
@@ -32,6 +33,25 @@ export class ListenView extends LitElement {
             font-family: 'Helvetica Neue', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             cursor: default;
             user-select: none;
+        }
+
+        .drag-handle {
+            -webkit-app-region: drag;
+            height: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: grab;
+            flex-shrink: 0;
+        }
+        .drag-handle-pill {
+            width: 36px;
+            height: 4px;
+            border-radius: 2px;
+            background: rgba(255, 255, 255, 0.2);
+        }
+        .drag-handle:hover .drag-handle-pill {
+            background: rgba(255, 255, 255, 0.35);
         }
 
 /* Allow text selection in insights responses */
@@ -122,10 +142,10 @@ export class ListenView extends LitElement {
             box-sizing: border-box;
             position: relative;
             background: rgba(0, 0, 0, 0.6);
-            overflow: hidden;
             border-radius: 12px;
             width: 100%;
             height: 100%;
+            overflow: hidden;
         }
 
         .assistant-container::after {
@@ -288,6 +308,167 @@ export class ListenView extends LitElement {
             font-size: 10px;
             color: rgba(255, 255, 255, 0.7);
         }
+
+        .contact-bar {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .contact-bar input {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 4px;
+            color: white;
+            font-size: 11px;
+            padding: 4px 8px;
+            outline: none;
+            font-family: 'Helvetica Neue', sans-serif;
+        }
+
+        .contact-bar input::placeholder {
+            color: rgba(255, 255, 255, 0.35);
+        }
+
+        .contact-bar input:focus {
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .contact-bar button {
+            background: rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.8);
+            border: none;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 10px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .contact-bar button:hover {
+            background: rgba(255, 255, 255, 0.18);
+        }
+
+        .main-layout {
+            display: flex;
+            flex-direction: row;
+            width: 100%;
+            height: 100%;
+        }
+
+        .main-panel {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .content-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            min-height: 0;
+            height: 0; /* forces flex to constrain height */
+        }
+
+        .content-area::-webkit-scrollbar {
+            width: 5px;
+        }
+        .content-area::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .content-area::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+        }
+
+        .crm-side-panel {
+            width: 200px;
+            flex-shrink: 0;
+            border-left: 1px solid rgba(255, 255, 255, 0.1);
+            overflow-y: auto;
+            padding: 8px 10px;
+            background: rgba(0, 0, 0, 0.15);
+        }
+
+        .crm-side-panel::-webkit-scrollbar {
+            width: 4px;
+        }
+        .crm-side-panel::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 2px;
+        }
+
+        .crm-side-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 6px;
+        }
+
+        .crm-side-name {
+            color: #ffffff;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .crm-side-company {
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 9px;
+            display: block;
+            margin-top: 1px;
+        }
+
+        .crm-side-clear {
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.3);
+            font-size: 10px;
+            cursor: pointer;
+            padding: 0 2px;
+        }
+
+        .crm-side-clear:hover {
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .crm-side-badge {
+            background: rgba(100, 200, 100, 0.15);
+            color: rgba(100, 220, 100, 0.9);
+            font-size: 8px;
+            padding: 1px 5px;
+            border-radius: 3px;
+            display: inline-block;
+            margin-bottom: 6px;
+        }
+
+        .crm-highlight-item {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 9px;
+            line-height: 1.5;
+            padding: 2px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        }
+
+        .crm-highlight-item:last-child {
+            border-bottom: none;
+        }
+
+        .crm-highlight-item strong {
+            color: #ffffff;
+            font-weight: 600;
+        }
+
+        .contact-error {
+            color: #ff6b6b;
+            font-size: 10px;
+            padding: 4px 12px;
+        }
         
         /* ────────────────[ GLASS BYPASS ]─────────────── */
         :host-context(body.has-glass) .assistant-container,
@@ -427,6 +608,11 @@ export class ListenView extends LitElement {
         captureStartTime: { type: Number },
         isSessionActive: { type: Boolean },
         hasCompletedRecording: { type: Boolean },
+        contactQuery: { type: String },
+        contactLoading: { type: Boolean },
+        contactHighlights: { type: Object },
+        contactError: { type: String },
+        contactExpanded: { type: Boolean },
     };
 
     constructor() {
@@ -443,8 +629,66 @@ export class ListenView extends LitElement {
         this.isThrottled = false;
         this.copyState = 'idle';
         this.copyTimeout = null;
+        this.contactQuery = '';
+        this.contactLoading = false;
+        this.contactHighlights = null;
+        this.contactError = '';
+        this.contactExpanded = false;
 
         this.adjustWindowHeight = this.adjustWindowHeight.bind(this);
+    }
+
+    async handleContactLookup(e) {
+        e.preventDefault();
+        const query = this.contactQuery.trim();
+        if (!query) return;
+
+        this.contactLoading = true;
+        this.contactError = '';
+        this.requestUpdate();
+
+        try {
+            const params = query.includes('@') ? { email: query } : { name: query };
+            const result = await window.api.vault.lookupContact(params);
+
+            if (result.success) {
+                this.contactHighlights = result.highlights;
+                this.contactError = '';
+
+            } else {
+                this.contactHighlights = null;
+                this.contactError = result.error || 'Contact not found';
+            }
+        } catch (err) {
+            this.contactHighlights = null;
+            this.contactError = 'Failed to connect to Vault';
+        }
+
+        this.contactLoading = false;
+        this.requestUpdate();
+        this.updateComplete.then(() => {
+            setTimeout(() => this.adjustWindowHeight(), 50);
+        });
+    }
+
+    renderHighlight(text) {
+        // Parse **bold** markdown in highlights
+        const parts = text.split(/\*\*([^*]+)\*\*/);
+        return parts.map((part, i) =>
+            i % 2 === 1 ? html`<strong>${part}</strong>` : part
+        );
+    }
+
+    clearContact() {
+        this.contactQuery = '';
+        this.contactHighlights = null;
+        this.contactError = '';
+        this.contactExpanded = false;
+        if (window.api?.vault) window.api.vault.clearContact();
+        this.requestUpdate();
+        this.updateComplete.then(() => {
+            setTimeout(() => this.adjustWindowHeight(), 50);
+        });
     }
 
     connectedCallback() {
@@ -454,6 +698,19 @@ export class ListenView extends LitElement {
             this.startTimer();
         }
         if (window.api) {
+            // Listen for auto-matched contacts from contactMatchService
+            window.api.vault.onContactChanged((event, { data, highlights }) => {
+                if (data && highlights) {
+                    this.contactHighlights = highlights;
+                    this.contactError = '';
+                    this.contactExpanded = true;
+                    this.requestUpdate();
+                    this.updateComplete.then(() => {
+                        setTimeout(() => this.adjustWindowHeight(), 50);
+                    });
+                }
+            });
+
             window.api.listenView.onSessionStateChanged((event, { isActive }) => {
                 const wasActive = this.isSessionActive;
                 this.isSessionActive = isActive;
@@ -514,33 +771,14 @@ export class ListenView extends LitElement {
 
     adjustWindowHeight() {
         if (!window.api) return;
-
-        this.updateComplete
-            .then(() => {
-                const topBar = this.shadowRoot.querySelector('.top-bar');
-                const activeContent = this.viewMode === 'transcript'
-                    ? this.shadowRoot.querySelector('stt-view')
-                    : this.shadowRoot.querySelector('summary-view');
-
-                if (!topBar || !activeContent) return;
-
-                const topBarHeight = topBar.offsetHeight;
-
-                const contentHeight = activeContent.scrollHeight;
-
-                const idealHeight = topBarHeight + contentHeight;
-
-                const targetHeight = Math.min(700, idealHeight);
-
-                console.log(
-                    `[Height Adjusted] Mode: ${this.viewMode}, TopBar: ${topBarHeight}px, Content: ${contentHeight}px, Ideal: ${idealHeight}px, Target: ${targetHeight}px`
-                );
-
-                window.api.listenView.adjustWindowHeight('listen', targetHeight);
-            })
-            .catch(error => {
-                console.error('Error in adjustWindowHeight:', error);
-            });
+        // Let it grow with content but cap at 600px
+        this.updateComplete.then(() => {
+            const container = this.shadowRoot.querySelector('.assistant-container');
+            if (!container) return;
+            const ideal = container.scrollHeight;
+            const target = Math.min(600, Math.max(200, ideal));
+            window.api.listenView.adjustWindowHeight('listen', target);
+        });
     }
 
     toggleViewMode() {
@@ -634,54 +872,95 @@ export class ListenView extends LitElement {
 
         return html`
             <div class="assistant-container">
-                <div class="top-bar">
-                    <div class="bar-left-text">
-                        <span class="bar-left-text-content ${this.isAnimating ? 'slide-in' : ''}">${displayText}</span>
+                <div class="drag-handle"><div class="drag-handle-pill"></div></div>
+                <div class="main-layout">
+                    <div class="main-panel">
+                        <div class="top-bar">
+                            <div class="bar-left-text">
+                                <span class="bar-left-text-content ${this.isAnimating ? 'slide-in' : ''}">${displayText}</span>
+                            </div>
+                            <div class="bar-controls">
+                                <button class="toggle-button" @click=${this.toggleViewMode}>
+                                    ${this.viewMode === 'insights'
+                                        ? html`
+                                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                  <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z" />
+                                                  <circle cx="12" cy="12" r="3" />
+                                              </svg>
+                                              <span>Show Transcript</span>
+                                          `
+                                        : html`
+                                              <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                  <path d="M9 11l3 3L22 4" />
+                                                  <path d="M22 12v7a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h11" />
+                                              </svg>
+                                              <span>Show Insights</span>
+                                          `}
+                                </button>
+                                <button
+                                    class="copy-button ${this.copyState === 'copied' ? 'copied' : ''}"
+                                    @click=${this.handleCopy}
+                                    @mouseenter=${() => this.handleCopyHover(true)}
+                                    @mouseleave=${() => this.handleCopyHover(false)}
+                                >
+                                    <svg class="copy-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                                        <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+                                    </svg>
+                                    <svg class="check-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                        <path d="M20 6L9 17l-5-5" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        ${!this.contactHighlights ? html`
+                            <form class="contact-bar" @submit=${this.handleContactLookup}>
+                                <input
+                                    type="text"
+                                    placeholder="Enter contact email or name..."
+                                    .value=${this.contactQuery}
+                                    @input=${(e) => this.contactQuery = e.target.value}
+                                    ?disabled=${this.contactLoading}
+                                />
+                                <button type="submit" ?disabled=${this.contactLoading}>
+                                    ${this.contactLoading ? '...' : '🔍'}
+                                </button>
+                            </form>
+                            ${this.contactError ? html`<div class="contact-error">${this.contactError}</div>` : ''}
+                        ` : ''}
+
+                        <div class="content-area">
+                            <stt-view 
+                                ?hidden=${this.viewMode !== 'transcript'}
+                                .isVisible=${this.viewMode === 'transcript'}
+                                @stt-messages-updated=${this.handleSttMessagesUpdated}
+                            ></stt-view>
+
+                            <summary-view 
+                                ?hidden=${this.viewMode !== 'insights'}
+                                .isVisible=${this.viewMode === 'insights'}
+                                .hasCompletedRecording=${this.hasCompletedRecording}
+                            ></summary-view>
+                        </div>
                     </div>
-                    <div class="bar-controls">
-                        <button class="toggle-button" @click=${this.toggleViewMode}>
-                            ${this.viewMode === 'insights'
-                                ? html`
-                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                          <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z" />
-                                          <circle cx="12" cy="12" r="3" />
-                                      </svg>
-                                      <span>Show Transcript</span>
-                                  `
-                                : html`
-                                      <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                          <path d="M9 11l3 3L22 4" />
-                                          <path d="M22 12v7a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h11" />
-                                      </svg>
-                                      <span>Show Insights</span>
-                                  `}
-                        </button>
-                        <button
-                            class="copy-button ${this.copyState === 'copied' ? 'copied' : ''}"
-                            @click=${this.handleCopy}
-                            @mouseenter=${() => this.handleCopyHover(true)}
-                            @mouseleave=${() => this.handleCopyHover(false)}
-                        >
-                            <svg class="copy-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                                <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
-                            </svg>
-                            <svg class="check-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                                <path d="M20 6L9 17l-5-5" />
-                            </svg>
-                        </button>
-                    </div>
+
+                    ${this.contactHighlights ? html`
+                        <div class="crm-side-panel">
+                            <div class="crm-side-header">
+                                <div>
+                                    <span class="crm-side-name">👤 ${this.contactHighlights.name}</span>
+                                    <span class="crm-side-company">${this.contactHighlights.company}</span>
+                                </div>
+                                <button class="crm-side-clear" @click=${this.clearContact}>✕</button>
+                            </div>
+                            <span class="crm-side-badge">CRM linked</span>
+                            ${this.contactHighlights.highlights.map(h => html`
+                                <div class="crm-highlight-item">${this.renderHighlight(h)}</div>
+                            `)}
+                        </div>
+                    ` : ''}
                 </div>
-
-                <stt-view 
-                    .isVisible=${this.viewMode === 'transcript'}
-                    @stt-messages-updated=${this.handleSttMessagesUpdated}
-                ></stt-view>
-
-                <summary-view 
-                    .isVisible=${this.viewMode === 'insights'}
-                    .hasCompletedRecording=${this.hasCompletedRecording}
-                ></summary-view>
             </div>
         `;
     }

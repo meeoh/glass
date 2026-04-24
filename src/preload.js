@@ -174,6 +174,7 @@ contextBridge.exposeInMainWorld('api', {
   listenView: {
     // Window Management
     adjustWindowHeight: (winName, height) => ipcRenderer.invoke('adjust-window-height', { winName, height }),
+    adjustWindowWidth: (winName, width) => ipcRenderer.invoke('adjust-window-width', { winName, width }),
     
     // Listeners
     onSessionStateChanged: (callback) => ipcRenderer.on('session-state-changed', callback),
@@ -302,5 +303,41 @@ contextBridge.exposeInMainWorld('api', {
     // Listeners
     onChangeListenCaptureState: (callback) => ipcRenderer.on('change-listen-capture-state', callback),
     removeOnChangeListenCaptureState: (callback) => ipcRenderer.removeListener('change-listen-capture-state', callback)
+  },
+
+  // Vault CRM integration
+  vault: {
+    lookupContact: (params) => ipcRenderer.invoke('vault:lookup-contact', params),
+    getCurrentContact: () => ipcRenderer.invoke('vault:get-current-contact'),
+    clearContact: () => ipcRenderer.invoke('vault:clear-contact'),
+    onContactChanged: (callback) => ipcRenderer.on('vault:contact-changed', callback),
+    removeOnContactChanged: (callback) => ipcRenderer.removeListener('vault:contact-changed', callback),
+  },
+
+  // Glass main window — Google Auth, Calendar, Contact Matching
+  glass: {
+    // Google Auth
+    authorizeGoogle: () => ipcRenderer.invoke('glass:authorize-google'),
+    signOutGoogle: () => ipcRenderer.invoke('glass:sign-out-google'),
+    getGoogleProfile: () => ipcRenderer.invoke('glass:get-google-profile'),
+    onAuthChanged: (callback) => ipcRenderer.on('glass:auth-changed', callback),
+    removeOnAuthChanged: (callback) => ipcRenderer.removeListener('glass:auth-changed', callback),
+
+    // Calendar
+    refreshCalendar: () => ipcRenderer.invoke('glass:refresh-calendar'),
+    getTodayEvents: () => ipcRenderer.invoke('glass:get-today-events'),
+    onEventsUpdated: (callback) => ipcRenderer.on('glass:events-updated', callback),
+    removeOnEventsUpdated: (callback) => ipcRenderer.removeListener('glass:events-updated', callback),
+
+    // Listen state
+    onListenStateChanged: (callback) => ipcRenderer.on('glass:listen-state-changed', callback),
+    removeOnListenStateChanged: (callback) => ipcRenderer.removeListener('glass:listen-state-changed', callback),
+
+    // Contact auto-matching
+    onMatchResult: (callback) => ipcRenderer.on('glass:match-result', callback),
+    removeOnMatchResult: (callback) => ipcRenderer.removeListener('glass:match-result', callback),
+
+    // Initial state load (for main window)
+    getInitialState: () => ipcRenderer.invoke('glass:get-initial-state'),
   }
 });

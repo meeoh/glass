@@ -4,6 +4,8 @@ const { createLLM } = require('../../common/ai/factory');
 const sessionRepository = require('../../common/repositories/session');
 const summaryRepository = require('./repositories');
 const modelStateService = require('../../common/services/modelStateService');
+const vaultService = require('../../vault/vaultService');
+const { buildKnowledgeContext } = require('../../common/prompts/knowledgeLoader');
 
 class SummaryService {
     constructor() {
@@ -41,7 +43,17 @@ class SummaryService {
         console.log(`💬 Added conversation text: ${conversationText}`);
         console.log(`📈 Total conversation history: ${this.conversationHistory.length} texts`);
 
-        // Trigger analysis if needed
+        // Check for high-signal moments that should trigger immediate coaching
+        if (speaker.toLowerCase() === 'them') {
+            const urgentSignal = this._detectUrgentSignal(text);
+            if (urgentSignal) {
+                console.log(`⚡ Urgent signal detected: ${urgentSignal.type} — triggering immediate coaching`);
+                this._triggerImmediateAnalysis(urgentSignal);
+                return;
+            }
+        }
+
+        // Standard cadence — every 2 turns
         this.triggerAnalysisIfNeeded();
     }
 
@@ -90,8 +102,18 @@ Please build upon this context while analyzing the new conversation segments.
 `;
         }
 
-        const basePrompt = getSystemPrompt('pickle_glass_analysis', '', false);
-        const systemPrompt = basePrompt.replace('{{CONVERSATION_HISTORY}}', recentConversation);
+        // Build CRM context if a contact is loaded
+        const contactData = vaultService.getCurrentContact();
+        const crmContext = vaultService.buildPromptContext();
+        const crmSection = crmContext
+            ? `\n\nCRM DATA FOR THIS CONTACT (use this to personalize your coaching):\n${crmContext}\n`
+            : '';
+
+        // Build sales knowledge context (core + vertical + regional + conversation-triggered)
+        const knowledgeContext = buildKnowledgeContext(contactData, recentConversation);
+
+        const basePrompt = getSystemPrompt('sales_coaching', '', false);
+        const systemPrompt = basePrompt.replace('{{CONVERSATION_HISTORY}}', knowledgeContext + crmSection + recentConversation);
 
         try {
             if (this.currentSessionId) {
@@ -113,25 +135,13 @@ Please build upon this context while analyzing the new conversation segments.
                     role: 'user',
                     content: `${contextualPrompt}
 
-Analyze the conversation and provide a structured summary. Format your response as follows:
+Based on the latest exchange in this sales call, what should the rep do or say RIGHT NOW?
 
-**Summary Overview**
-- Main discussion point with context
-
-**Key Topic: [Topic Name]**
-- First key insight
-- Second key insight
-- Third key insight
-
-**Extended Explanation**
-Provide 2-3 sentences explaining the context and implications.
-
-**Suggested Questions**
-1. First follow-up question?
-2. Second follow-up question?
-3. Third follow-up question?
-
-Keep all points concise and build upon previous analysis if provided.`,
+Format:
+- Lead with the most urgent coaching point (objection handling, buying signal, or discovery question)
+- Give the exact words to say in quotes
+- Max 3-4 bullet points total
+- Be specific to what was just said`,
                 },
             ];
 
@@ -142,15 +152,14 @@ Keep all points concise and build upon previous analysis if provided.`,
                 model: modelInfo.model,
                 temperature: 0.7,
                 maxTokens: 1024,
-                usePortkey: modelInfo.provider === 'openai-glass',
-                portkeyVirtualKey: modelInfo.provider === 'openai-glass' ? modelInfo.apiKey : undefined,
+
             });
 
             const completion = await llm.chat(messages);
 
             const responseText = completion.content;
             console.log(`✅ Analysis response received: ${responseText}`);
-            const structuredData = this.parseResponseText(responseText, this.previousAnalysisResult);
+            const structuredData = this.parseSalesCoachingResponse(responseText);
 
             if (this.currentSessionId) {
                 try {
@@ -184,6 +193,63 @@ Keep all points concise and build upon previous analysis if provided.`,
             console.error('❌ Error during analysis generation:', error.message);
             return this.previousAnalysisResult; // 에러 시 이전 결과 반환
         }
+    }
+
+    /**
+     * Parse the sales coaching LLM response into structured data for the UI.
+     * Treats the full markdown response as the main content rather than
+     * trying to parse rigid section headers.
+     */
+    parseSalesCoachingResponse(responseText) {
+        const lines = responseText.split('\n').filter(l => l.trim());
+        const sayThis = [];      // What to say — most prominent
+        const context = [];      // Supporting context (objection type, signals)
+        const questions = [];    // Follow-up questions to ask
+
+        for (const line of lines) {
+            const trimmed = line.trim();
+
+            // Skip standalone bold headers — they're labels, not content
+            if (trimmed.match(/^\*\*[^*]+\*\*$/) && !trimmed.startsWith('- ')) {
+                // But keep objection/signal labels as context
+                const label = trimmed.replace(/\*\*/g, '');
+                if (label.length < 60) {
+                    context.push(label);
+                }
+                continue;
+            }
+
+            const content = trimmed.replace(/^[-*]\s*/, '');
+
+            // Lines with quotes are speakable — highest priority
+            if (content.includes('"') || content.includes('\u201c')) {
+                sayThis.push(content);
+            }
+            // Questions go to actions
+            else if (content.includes('?')) {
+                questions.push(content);
+            }
+            // Bold-prefixed bullets are context labels
+            else if (content.match(/^\*\*[^*]+\*\*/)) {
+                context.push(content);
+            }
+            // Everything else is supporting detail
+            else if (content.length > 10) {
+                context.push(content);
+            }
+        }
+
+        // If no quoted suggestions, promote context items
+        if (sayThis.length === 0 && context.length > 0) {
+            sayThis.push(...context.splice(0, 2));
+        }
+
+        return {
+            summary: sayThis.slice(0, 4),
+            topic: { header: context.length > 0 ? context[0] : '', bullets: context.slice(1, 5) },
+            actions: questions.slice(0, 5),
+            followUps: [],
+        };
     }
 
     parseResponseText(responseText, previousResult) {
@@ -302,9 +368,90 @@ Keep all points concise and build upon previous analysis if provided.`,
     /**
      * Triggers analysis when conversation history reaches 5 texts.
      */
+    // ─── Smart Coaching Triggers ───
+
+    // High-signal patterns that warrant immediate coaching (not waiting for 2-turn cadence)
+    static URGENT_SIGNALS = {
+        objection_price: {
+            type: 'objection_price',
+            patterns: ['too expensive', 'too costly', 'over budget', 'out of budget', 'can\'t afford', 'price is too', 'cost is too', 'cheaper option', 'cheaper alternative', 'not in the budget', 'budget concern', 'sticker shock', 'that\'s a lot'],
+            coachingHint: 'PRICE OBJECTION DETECTED — respond immediately with ROI reframe',
+        },
+        objection_competitor: {
+            type: 'objection_competitor',
+            patterns: ['already using', 'current vendor', 'we use bigcommerce', 'we use magento', 'we use woocommerce', 'we use salesforce', 'we use wix', 'we use squarespace', 'happy with our current', 'already have a solution', 'we\'re on shopify\'s competitor', 'looked at other options', 'considering other', 'evaluating other'],
+            coachingHint: 'COMPETITOR/STATUS QUO OBJECTION — probe for gaps, don\'t bash',
+        },
+        objection_timing: {
+            type: 'objection_timing',
+            patterns: ['not the right time', 'maybe next quarter', 'maybe next year', 'not a priority', 'too busy right now', 'revisit later', 'circle back', 'not ready yet', 'need more time', 'let me think about it', 'i need to think', 'sleep on it'],
+            coachingHint: 'TIMING OBJECTION — create urgency around their pain, not your deadline',
+        },
+        objection_authority: {
+            type: 'objection_authority',
+            patterns: ['need to talk to my', 'run it by my', 'check with my boss', 'need approval from', 'not my decision', 'have to discuss with', 'need to loop in', 'my manager needs to', 'the team needs to', 'committee decision'],
+            coachingHint: 'AUTHORITY OBJECTION — offer to join the next conversation with decision maker',
+        },
+        buying_signal: {
+            type: 'buying_signal',
+            patterns: ['what\'s the pricing', 'how much does it cost', 'what does it cost', 'what\'s the timeline', 'how long does implementation', 'when can we start', 'what are the next steps', 'how do we get started', 'can you send a proposal', 'send me a contract', 'what\'s the onboarding', 'can we do a pilot', 'can we do a trial', 'what does migration look like', 'how does the contract work'],
+            coachingHint: '🟢 BUYING SIGNAL — advance toward close NOW',
+        },
+        risk_signal: {
+            type: 'risk_signal',
+            patterns: ['i\'m not sure', 'i don\'t think this will work', 'we tried something like this before', 'what if it doesn\'t work', 'seems risky', 'concerned about', 'worried about', 'what happens if', 'what\'s the downside', 'too complex', 'sounds complicated'],
+            coachingHint: 'RISK/CONCERN DETECTED — offer pilot, phased approach, or case study',
+        },
+    };
+
+    /**
+     * Check if the prospect just said something that needs immediate coaching.
+     * Returns the signal object or null.
+     */
+    _detectUrgentSignal(text) {
+        const lower = text.toLowerCase();
+        // Debounce — don't fire if we just triggered an immediate analysis within 15s
+        if (this._lastImmediateTrigger && Date.now() - this._lastImmediateTrigger < 15000) {
+            return null;
+        }
+        for (const signal of Object.values(SummaryService.URGENT_SIGNALS)) {
+            for (const pattern of signal.patterns) {
+                if (lower.includes(pattern)) {
+                    return signal;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Trigger an immediate coaching analysis with the urgent signal hint
+     * prepended so the LLM knows to prioritize it.
+     */
+    async _triggerImmediateAnalysis(signal) {
+        this._lastImmediateTrigger = Date.now();
+
+        // Prepend the signal hint to the conversation so the LLM sees it
+        const hintedHistory = [
+            ...this.conversationHistory.slice(0, -1),
+            `[COACHING SYSTEM: ${signal.coachingHint}]`,
+            this.conversationHistory[this.conversationHistory.length - 1],
+        ];
+
+        console.log(`⚡ Immediate coaching trigger: ${signal.type}`);
+        const data = await this.makeOutlineAndRequests(hintedHistory);
+        if (data) {
+            console.log('⚡ Sending immediate coaching to renderer');
+            this.sendToRenderer('summary-update', data);
+            if (this.onAnalysisComplete) {
+                this.onAnalysisComplete(data);
+            }
+        }
+    }
+
     async triggerAnalysisIfNeeded() {
-        if (this.conversationHistory.length >= 5 && this.conversationHistory.length % 5 === 0) {
-            console.log(`Triggering analysis - ${this.conversationHistory.length} conversation texts accumulated`);
+        if (this.conversationHistory.length >= 2 && this.conversationHistory.length % 2 === 0) {
+            console.log(`Triggering sales coaching analysis - ${this.conversationHistory.length} conversation texts accumulated`);
 
             const data = await this.makeOutlineAndRequests(this.conversationHistory);
             if (data) {

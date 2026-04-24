@@ -28,7 +28,7 @@ if (shouldUseLiquidGlass) {
 }
 /* ────────────────[ GLASS BYPASS ]─────────────── */
 
-let isContentProtectionOn = true;
+let isContentProtectionOn = false; // Disabled for dev/demo — set to true for production
 let lastVisibleWindows = new Set(['header']);
 
 let currentHeaderState = 'apikey';
@@ -41,6 +41,17 @@ let layoutManager = null;
 let movementManager = null;
 
 
+// Track if user has manually dragged feature windows
+const userDraggedWindows = new Set();
+
+function markWindowDragged(name) {
+    userDraggedWindows.add(name);
+}
+
+function resetWindowDragged(name) {
+    userDraggedWindows.delete(name);
+}
+
 function updateChildWindowLayouts(animated = true) {
     // if (movementManager.isAnimating) return;
 
@@ -48,10 +59,15 @@ function updateChildWindowLayouts(animated = true) {
     const listenWin = windowPool.get('listen');
     const askWin = windowPool.get('ask');
     if (listenWin && !listenWin.isDestroyed() && listenWin.isVisible()) {
-        visibleWindows.listen = true;
+        // Skip layout for user-dragged windows
+        if (!userDraggedWindows.has('listen')) {
+            visibleWindows.listen = true;
+        }
     }
     if (askWin && !askWin.isDestroyed() && askWin.isVisible()) {
-        visibleWindows.ask = true;
+        if (!userDraggedWindows.has('ask')) {
+            visibleWindows.ask = true;
+        }
     }
 
     if (Object.keys(visibleWindows).length === 0) return;
@@ -458,7 +474,7 @@ function createFeatureWindows(header, namesToCreate) {
         switch (name) {
             case 'listen': {
                 const listen = new BrowserWindow({
-                    ...commonChildOptions, width:400,minWidth:400,maxWidth:900,
+                    ...commonChildOptions, width:620,minWidth:620,maxWidth:900,
                     maxHeight:900,
                 });
                 listen.setContentProtection(isContentProtectionOn);
@@ -483,9 +499,15 @@ function createFeatureWindows(header, namesToCreate) {
                     });
                 }
                 if (!app.isPackaged) {
-                    listen.webContents.openDevTools({ mode: 'detach' });
+
                 }
                 windowPool.set('listen', listen);
+                // Track user drag so layout doesn't snap it back
+                listen.on('moved', () => {
+                    if (!movementManager.isAnimating) {
+                        markWindowDragged('listen');
+                    }
+                });
                 break;
             }
 
@@ -516,7 +538,7 @@ function createFeatureWindows(header, namesToCreate) {
                 
                 // Open DevTools in development
                 if (!app.isPackaged) {
-                    ask.webContents.openDevTools({ mode: 'detach' });
+
                 }
                 windowPool.set('ask', ask);
                 break;
@@ -551,7 +573,7 @@ function createFeatureWindows(header, namesToCreate) {
                 windowPool.set('settings', settings);  
 
                 if (!app.isPackaged) {
-                    settings.webContents.openDevTools({ mode: 'detach' });
+
                 }
                 break;
             }
@@ -589,7 +611,7 @@ function createFeatureWindows(header, namesToCreate) {
 
                 windowPool.set('shortcut-settings', shortcutEditor);
                 if (!app.isPackaged) {
-                    shortcutEditor.webContents.openDevTools({ mode: 'detach' });
+
                 }
                 break;
             }
@@ -652,6 +674,7 @@ function createWindows() {
         height: HEADER_HEIGHT,
         x: initialX,
         y: initialY,
+        show: false,  // HUD stays hidden until a call is detected
         frame: false,
         transparent: true,
         vibrancy: false,
@@ -724,7 +747,7 @@ function createWindows() {
     
     // Open DevTools in development
     if (!app.isPackaged) {
-        header.webContents.openDevTools({ mode: 'detach' });
+
     }
 
     header.on('focus', () => {
@@ -790,8 +813,136 @@ const handleHeaderStateChanged = (state) => {
 };
 
 
+/**
+ * Create the main Glass application window (not the HUD).
+ * This is a proper macOS app window that shows on launch for Google auth,
+ * calendar events, and status overview.
+ */
+function createMainAppWindow() {
+    if (windowPool.has('main-app')) {
+        const existing = windowPool.get('main-app');
+        if (existing && !existing.isDestroyed()) {
+            existing.show();
+            existing.focus();
+            return existing;
+        }
+    }
+
+    const primaryDisplay = screen.getPrimaryDisplay();
+    const { width: screenWidth, height: screenHeight } = primaryDisplay.workArea;
+    const winWidth = 420;
+    const winHeight = 640;
+
+    const mainWin = new BrowserWindow({
+        width: winWidth,
+        height: winHeight,
+        x: Math.round((screenWidth - winWidth) / 2),
+        y: Math.round((screenHeight - winHeight) / 2),
+        frame: false,
+        titleBarStyle: 'hiddenInset',
+        vibrancy: 'under-window',
+        visualEffectState: 'active',
+        transparent: false,
+        backgroundColor: '#0d0d0f',
+        hasShadow: true,
+        show: true,
+        resizable: true,
+        minWidth: 380,
+        minHeight: 500,
+        maxWidth: 600,
+        maxHeight: 900,
+        webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true,
+            preload: path.join(__dirname, '../preload.js'),
+            backgroundThrottling: false,
+        },
+        title: 'Glass',
+    });
+
+    mainWin.loadFile(path.join(__dirname, '../ui/main/main.html'));
+    windowPool.set('main-app', mainWin);
+
+    mainWin.on('closed', () => {
+        windowPool.delete('main-app');
+    });
+
+    // No DevTools for main app window — it's simple HTML, no debugging needed
+
+    return mainWin;
+}
+
+/**
+ * Show/hide the main app window.
+ */
+function showMainAppWindow() {
+    const win = windowPool.get('main-app');
+    if (win && !win.isDestroyed()) {
+        win.show();
+        win.focus();
+    } else {
+        createMainAppWindow();
+    }
+}
+
+/**
+ * Show the HUD (header + feature windows) when a call starts.
+ */
+function showHUD() {
+    // Reset drag tracking so windows start at default positions for new call
+    userDraggedWindows.clear();
+    const header = windowPool.get('header');
+    if (header && !header.isDestroyed()) {
+        header.showInactive();
+        console.log('[WindowManager] HUD shown (call started)');
+    }
+}
+
+/**
+ * Hide the HUD when a call ends.
+ */
+function hideHUD() {
+    // Hide the main app window FIRST to prevent macOS from auto-focusing it
+    // when HUD windows close
+    const mainWin = windowPool.get('main-app');
+    if (mainWin && !mainWin.isDestroyed() && mainWin.isVisible()) {
+        mainWin.hide();
+    }
+
+    const header = windowPool.get('header');
+    if (header && !header.isDestroyed()) {
+        header.hide();
+        console.log('[WindowManager] HUD hidden (call ended)');
+    }
+    // Also hide feature windows
+    ['listen', 'ask', 'settings'].forEach(name => {
+        const win = windowPool.get(name);
+        if (win && !win.isDestroyed() && win.isVisible()) {
+            win.hide();
+        }
+    });
+    // Main window stays hidden — user can reopen via dock icon
+}
+
+/**
+ * Notify the main app window about listen state changes.
+ */
+function notifyListenStateChanged(isListening) {
+    BrowserWindow.getAllWindows().forEach(win => {
+        if (win && !win.isDestroyed()) {
+            win.webContents.send('glass:listen-state-changed', isListening);
+        }
+    });
+}
+
+
 module.exports = {
     createWindows,
+    createMainAppWindow,
+    showMainAppWindow,
+    showHUD,
+    hideHUD,
+    notifyListenStateChanged,
     windowPool,
     toggleContentProtection,
     resizeHeaderWindow,

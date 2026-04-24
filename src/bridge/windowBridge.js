@@ -26,6 +26,16 @@ module.exports = {
     ipcMain.handle('get-header-position', () => windowManager.getHeaderPosition());
     ipcMain.handle('move-header-to', (event, newX, newY) => windowManager.moveHeaderTo(newX, newY));
     ipcMain.handle('adjust-window-height', (event, { winName, height }) => windowManager.adjustWindowHeight(winName, height));
+    ipcMain.handle('adjust-window-width', (event, { winName, width }) => {
+        const win = windowManager.windowPool?.get(winName);
+        if (win && !win.isDestroyed()) {
+            const bounds = win.getBounds();
+            // Set size directly, not bounds (avoids layout manager override)
+            win.setSize(width, bounds.height);
+            // Also set min width so layout manager can't shrink it back
+            win.setMinimumSize(width, 0);
+        }
+    });
   },
 
   notifyFocusChange(win, isFocused) {

@@ -7,19 +7,22 @@
 
 require('dotenv').config();
 
+// Prevent EPIPE crashes when stdout/stderr pipe is broken
+process.stdout?.on?.('error', () => {});
+process.stderr?.on?.('error', () => {});
+
 if (require('electron-squirrel-startup')) {
     process.exit(0);
 }
 
 const { app, BrowserWindow, shell, ipcMain, dialog, desktopCapturer, session } = require('electron');
-const { createWindows } = require('./window/windowManager.js');
+const { createWindows, createMainAppWindow, notifyListenStateChanged, showHUD, hideHUD } = require('./window/windowManager.js');
 const listenService = require('./features/listen/listenService');
-const { initializeFirebase } = require('./features/common/services/firebaseClient');
 const databaseInitializer = require('./features/common/services/databaseInitializer');
 const authService = require('./features/common/services/authService');
 const path = require('node:path');
 const express = require('express');
-const fetch = require('node-fetch');
+
 const { autoUpdater } = require('electron-updater');
 const { EventEmitter } = require('events');
 const askService = require('./features/ask/askService');
@@ -28,6 +31,28 @@ const sessionRepository = require('./features/common/repositories/session');
 const modelStateService = require('./features/common/services/modelStateService');
 const featureBridge = require('./bridge/featureBridge');
 const windowBridge = require('./bridge/windowBridge');
+const callDetectionService = require('./features/callDetection/callDetectionService');
+const googleAuthService = require('./features/googleAuth/googleAuthService');
+const calendarService = require('./features/calendar/calendarService');
+const contactMatchService = require('./features/contactMatch/contactMatchService');
+
+// Ensure MicWatcher binary exists (compile if needed)
+(function ensureMicWatcher() {
+    const fs = require('fs');
+    const micWatcherPath = require('path').join(__dirname, 'native', 'MicWatcher');
+    if (!fs.existsSync(micWatcherPath) && process.platform === 'darwin') {
+        console.log('[index.js] MicWatcher binary not found, compiling...');
+        try {
+            require('child_process').execSync(
+                `swiftc -O -o "${micWatcherPath}" "${micWatcherPath}.swift" -framework CoreAudio -framework Foundation`,
+                { stdio: 'inherit' }
+            );
+            console.log('[index.js] MicWatcher compiled successfully');
+        } catch (err) {
+            console.error('[index.js] Failed to compile MicWatcher:', err.message);
+        }
+    }
+})();
 
 // Global variables
 const eventBridge = new EventEmitter();
@@ -161,7 +186,9 @@ if (process.platform === 'win32') {
 }
 
 const gotTheLock = app.requestSingleInstanceLock();
+console.log('[index.js] Single instance lock:', gotTheLock);
 if (!gotTheLock) {
+    console.log('[index.js] Another instance is running, quitting.');
     app.quit();
     process.exit(0);
 }
@@ -169,7 +196,14 @@ if (!gotTheLock) {
 // setup protocol after single instance lock
 setupProtocolHandling();
 
+console.log('[index.js] Waiting for app.whenReady()...');
 app.whenReady().then(async () => {
+    console.log('[index.js] ✅ App is ready!');
+
+    // Ensure the dock icon is visible so the user can always find Glass
+    if (process.platform === 'darwin' && app.dock) {
+        app.dock.show();
+    }
 
     // Setup native loopback audio capture for Windows
     session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
@@ -183,8 +217,6 @@ app.whenReady().then(async () => {
     });
 
     // Initialize core services
-    initializeFirebase();
-    
     try {
         await databaseInitializer.initialize();
         console.log('>>> [index.js] Database initialized successfully');
@@ -219,7 +251,60 @@ app.whenReady().then(async () => {
         WEB_PORT = await startWebStack();
         console.log('Web front-end listening on', WEB_PORT);
         
+        // Create the HUD windows (header, listen, ask, settings) — but don't show them yet.
+        // The HUD only appears when a call is detected (mic goes active).
         createWindows();
+
+        // Create the main Glass application window (always visible on launch)
+        createMainAppWindow();
+
+        // Restore Google auth session from SQLite
+        await googleAuthService.initialize();
+        if (googleAuthService.isAuthorized()) {
+            console.log(`[index.js] Google auth restored for ${googleAuthService.getUserEmail()}`);
+            calendarService.start();
+        }
+
+        // Set the rep's Shopify email for Vault active call lookups.
+        // This works even without Google auth connected.
+        const repEmail = process.env.GLASS_REP_EMAIL || null;
+        if (repEmail) {
+            contactMatchService.setRepEmail(repEmail);
+            console.log(`[index.js] Rep email configured: ${repEmail}`);
+        }
+
+        // Start call detection — auto-listen when mic is used by another app
+        console.log('>>> [index.js] About to start call detection...');
+        callDetectionService.start();
+        console.log('>>> [index.js] Call detection started.');
+        callDetectionService.on('call-started', async () => {
+            console.log('[index.js] 📞 Call detected — auto-starting listen session');
+            try {
+                // Show the HUD overlay
+                showHUD();
+                await listenService.handleListenRequest('Listen');
+                callDetectionService.setListening(true);
+                notifyListenStateChanged(true);
+
+                // Auto-match the contact in the background
+                console.log('[index.js] 🔍 Starting contact auto-match...');
+                contactMatchService.autoMatch().then(result => {
+                    if (result) {
+                        console.log(`[index.js] ✅ Auto-matched contact: ${result.contact?.name}`);
+                    } else {
+                        console.log('[index.js] ❌ No auto-match found — rep can enter manually');
+                    }
+                }).catch(err => {
+                    console.error('[index.js] Auto-match error:', err.message);
+                });
+            } catch (err) {
+                console.error('[index.js] Auto-start listen failed:', err.message);
+            }
+        });
+
+
+
+
 
     } catch (err) {
         console.error('>>> [index.js] Database initialization failed - some features may not work', err);
@@ -257,7 +342,10 @@ app.on('before-quit', async (event) => {
     event.preventDefault();
     
     try {
-        // 1. Stop audio capture first (immediate)
+        // 1. Stop audio capture and new services first (immediate)
+        callDetectionService.stop();
+        calendarService.stop();
+        contactMatchService.clearMatch();
         await listenService.closeSession();
         console.log('[Shutdown] Audio capture stopped');
         
@@ -309,9 +397,9 @@ app.on('before-quit', async (event) => {
 });
 
 app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-        createWindows();
-    }
+    // When dock icon is clicked, show the main app window
+    const { showMainAppWindow } = require('./window/windowManager.js');
+    showMainAppWindow();
 });
 
 function setupWebDataHandlers() {
@@ -470,10 +558,6 @@ async function handleCustomUrl(url) {
         console.log('[Custom URL] Action:', action, 'Params:', params);
 
         switch (action) {
-            case 'login':
-            case 'auth-success':
-                await handleFirebaseAuthCallback(params);
-                break;
             case 'personalize':
                 handlePersonalizeFromUrl(params);
                 break;
@@ -495,71 +579,7 @@ async function handleCustomUrl(url) {
     }
 }
 
-async function handleFirebaseAuthCallback(params) {
-    const userRepository = require('./features/common/repositories/user');
-    const { token: idToken } = params;
 
-    if (!idToken) {
-        console.error('[Auth] Firebase auth callback is missing ID token.');
-        // No need to send IPC, the UI won't transition without a successful auth state change.
-        return;
-    }
-
-    console.log('[Auth] Received ID token from deep link, exchanging for custom token...');
-
-    try {
-        const functionUrl = 'https://us-west1-pickle-3651a.cloudfunctions.net/pickleGlassAuthCallback';
-        const response = await fetch(functionUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: idToken })
-        });
-
-        const data = await response.json();
-
-        if (!response.ok || !data.success) {
-            throw new Error(data.error || 'Failed to exchange token.');
-        }
-
-        const { customToken, user } = data;
-        console.log('[Auth] Successfully received custom token for user:', user.uid);
-
-        const firebaseUser = {
-            uid: user.uid,
-            email: user.email || 'no-email@example.com',
-            displayName: user.name || 'User',
-            photoURL: user.picture
-        };
-
-        // 1. Sync user data to local DB
-        userRepository.findOrCreate(firebaseUser);
-        console.log('[Auth] User data synced with local DB.');
-
-        // 2. Sign in using the authService in the main process
-        await authService.signInWithCustomToken(customToken);
-        console.log('[Auth] Main process sign-in initiated. Waiting for onAuthStateChanged...');
-
-        // 3. Focus the app window
-        const { windowPool } = require('./window/windowManager.js');
-        const header = windowPool.get('header');
-        if (header) {
-            if (header.isMinimized()) header.restore();
-            header.focus();
-        } else {
-            console.error('[Auth] Header window not found after auth callback.');
-        }
-        
-    } catch (error) {
-        console.error('[Auth] Error during custom token exchange or sign-in:', error);
-        // The UI will not change, and the user can try again.
-        // Optionally, send a generic error event to the renderer.
-        const { windowPool } = require('./window/windowManager.js');
-        const header = windowPool.get('header');
-        if (header) {
-            header.webContents.send('auth-failed', { message: error.message });
-        }
-    }
-}
 
 function handlePersonalizeFromUrl(params) {
     console.log('[Custom URL] Personalize params:', params);
