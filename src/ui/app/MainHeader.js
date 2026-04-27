@@ -135,6 +135,7 @@ export class MainHeader extends LitElement {
             justify-content: center;
             width: 28px;
             height: 26px;
+            margin-left: 6px;
             border-radius: 9000px;
             border: none;
             cursor: pointer;
@@ -746,7 +747,7 @@ export class MainHeader extends LitElement {
                             <line x1="16" y1="17" x2="8" y2="17" />
                             <polyline points="10 9 9 9 8 9" />
                         </svg>
-                        <span class="vault-tooltip">${this.sendSummary ? 'Vault notes on' : 'Vault notes off'}</span>
+                        <span class="vault-tooltip">${this.sendSummary ? 'AI summary will be sent to Vault' : 'AI summary will not be sent'}</span>
                     </button>
                 ` : ''}
 
