@@ -340,6 +340,9 @@ contextBridge.exposeInMainWorld('api', {
     onMatchResult: (callback) => ipcRenderer.on('glass:match-result', callback),
     removeOnMatchResult: (callback) => ipcRenderer.removeListener('glass:match-result', callback),
 
+    // Show HUD overlay
+    showHUD: () => ipcRenderer.invoke('glass:show-hud'),
+
     // Initial state load (for main window)
     getInitialState: () => ipcRenderer.invoke('glass:get-initial-state'),
   }

@@ -370,6 +370,14 @@ module.exports = {
       return calendarService.getTodayEvents();
     });
 
+    // Show HUD from main window
+    ipcMain.handle('glass:show-hud', () => {
+      const { showHUD, showAllWindows } = require('../window/windowManager');
+      showHUD();
+      showAllWindows();
+      return { success: true };
+    });
+
     // Initial state for main window
     ipcMain.handle('glass:get-initial-state', async () => {
       return {

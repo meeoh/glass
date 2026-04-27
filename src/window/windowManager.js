@@ -935,6 +935,19 @@ function hideHUD() {
 /**
  * Notify the main app window about listen state changes.
  */
+/**
+ * Show all HUD windows (header + feature windows).
+ * Used when the user clicks "Show HUD" from the main app window.
+ */
+function showAllWindows() {
+    ['header', 'listen', 'ask'].forEach(name => {
+        const win = windowPool.get(name);
+        if (win && !win.isDestroyed()) {
+            win.showInactive();
+        }
+    });
+}
+
 function notifyListenStateChanged(isListening) {
     BrowserWindow.getAllWindows().forEach(win => {
         if (win && !win.isDestroyed()) {
@@ -950,6 +963,7 @@ module.exports = {
     showMainAppWindow,
     showHUD,
     hideHUD,
+    showAllWindows,
     notifyListenStateChanged,
     windowPool,
     toggleContentProtection,

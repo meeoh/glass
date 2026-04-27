@@ -396,10 +396,11 @@
                     html += `
                         <div class="call-active-banner">
                             <div class="pulse-ring"></div>
-                            <div>
+                            <div style="flex:1">
                                 <div style="font-size:13px;font-weight:600;color:var(--accent)">On a Call</div>
                                 <div style="font-size:11px;color:var(--text-secondary)">Listening and coaching in real-time</div>
                             </div>
+                            <button class="btn btn-ghost btn-sm" onclick="showHUD()" style="white-space:nowrap">Show HUD</button>
                         </div>`;
 
                     if (state.matchResult && state.matchResult.matched) {
@@ -537,6 +538,10 @@
 
             function refreshCalendar() {
                 window.api.glass.refreshCalendar();
+            }
+
+            function showHUD() {
+                window.api.glass.showHUD();
             }
 
             // ─── IPC Listeners ───
