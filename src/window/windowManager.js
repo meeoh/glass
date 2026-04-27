@@ -891,7 +891,15 @@ function showMainAppWindow() {
 function showHUD() {
     // Reset drag tracking so windows start at default positions for new call
     userDraggedWindows.clear();
+
+    // Ensure feature windows exist (they may not if header state hasn't
+    // transitioned to 'main' yet when MicWatcher fires on launch)
     const header = windowPool.get('header');
+    if (header && !header.isDestroyed() && !windowPool.has('listen')) {
+        console.log('[WindowManager] Feature windows not yet created — creating now for HUD');
+        createFeatureWindows(header);
+    }
+
     if (header && !header.isDestroyed()) {
         header.showInactive();
         console.log('[WindowManager] HUD shown (call started)');
