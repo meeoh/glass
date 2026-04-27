@@ -473,15 +473,16 @@ export class ListenView extends LitElement {
         .match-source-bar {
             display: flex;
             align-items: center;
-            gap: 6px;
-            padding: 5px 12px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-            font-size: 10px;
-            color: rgba(255, 255, 255, 0.5);
+            gap: 8px;
+            padding: 7px 12px;
+            background: rgba(99, 102, 241, 0.1);
+            border-bottom: 1px solid rgba(99, 102, 241, 0.15);
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.8);
         }
 
         .match-source-icon {
-            font-size: 11px;
+            font-size: 13px;
             flex-shrink: 0;
         }
 
@@ -491,21 +492,25 @@ export class ListenView extends LitElement {
             text-overflow: ellipsis;
             min-width: 0;
             flex: 1;
+            font-weight: 500;
         }
 
         .match-source-clear {
             background: none;
             border: none;
-            color: rgba(255, 255, 255, 0.25);
-            font-size: 11px;
+            color: rgba(255, 255, 255, 0.35);
+            font-size: 13px;
             cursor: pointer;
-            padding: 0 2px;
+            padding: 2px 4px;
             flex-shrink: 0;
             line-height: 1;
+            border-radius: 3px;
+            transition: background 0.15s ease, color 0.15s ease;
         }
 
         .match-source-clear:hover {
-            color: rgba(255, 255, 255, 0.6);
+            color: rgba(255, 255, 255, 0.8);
+            background: rgba(255, 255, 255, 0.1);
         }
 
 
@@ -723,6 +728,13 @@ export class ListenView extends LitElement {
 
     clearMatchSource() {
         this.matchMeta = null;
+        // Also clear the linked contact so the CRM panel disappears
+        // and the manual search bar shows for re-matching
+        this.contactHighlights = null;
+        this.contactQuery = '';
+        this.contactError = '';
+        this.contactExpanded = false;
+        if (window.api?.vault) window.api.vault.clearContact();
         this.requestUpdate();
         this.updateComplete.then(() => {
             setTimeout(() => this.adjustWindowHeight(), 50);
