@@ -25,6 +25,7 @@ The app is an Electron desktop application with three layers:
 | **Google Calendar** | `https://www.googleapis.com/calendar/v3/calendars/primary/events` | OAuth2 access token |
 | **Google User Profile** | `https://www.googleapis.com/oauth2/v2/userinfo` | OAuth2 access token |
 | **Vault Contact Lookup** | `GET /crm/api/contacts/lookup?email=...` | Bearer token |
+| **Vault Batch Lookup** | `GET /crm/api/contacts/batch_lookup?emails[]=...` | Bearer token |
 | **Vault Active Call** | `GET /crm/api/active_call?user_email=...` | Bearer token |
 
 ## Audio Capture Pipeline

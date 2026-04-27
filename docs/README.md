@@ -23,6 +23,9 @@ Built on top of [Pickle Glass](https://github.com/meeoh/glass), stripped of thir
 | Sales knowledge base (16 files, conversation-aware) | ✅ Working |
 | Smart coaching triggers (instant on objections) | ✅ Working |
 | Post-call AI summary → CRM | ✅ Working |
+| Vault notes toggle (opt-out before Done) | ✅ Working |
+| Match source indicator (Dialer / Calendar event) | ✅ Working |
+| Batch calendar attendee lookup | ✅ Working |
 | Auto-stop listening when call ends | 🔜 Planned |
 | Invisible to screen share | ✅ Working (inherited) |
 
@@ -94,11 +97,13 @@ Glass automatically detects when you join a call. A native Swift binary (`MicWat
 When a call starts, Glass automatically tries to identify who you're talking to using two methods **in parallel**:
 
 1. **Vault Active Call API** (takes precedence) — asks the CRM if the rep is currently on a Twilio dialer call. If yes, returns the full contact/account data.
-2. **Google Calendar** — checks events happening now (±5 min buffer), extracts external attendee emails, looks each up in Vault CRM.
+2. **Google Calendar** — checks events happening now (asymmetric buffer: 2 min before start, 7 min after end), collects all external attendee emails from matching events, and sends them in a **single batch request** to `GET /crm/api/contacts/batch_lookup`. The first email that exists in Vault wins.
 
-The Vault API result always wins. If neither method finds a match, the rep can still enter the contact manually. Calendar matching gracefully degrades — if Google isn't connected, only the Vault method runs.
+The Vault API result always wins. If neither method finds a match, the rep can still enter the contact manually. Calendar matching gracefully degrades — if Google isn't connected, only the Vault method runs. If the batch endpoint is unavailable, falls back to sequential lookups.
 
 Once matched, the CRM side panel auto-populates and the LLM coaching prompt includes the contact's full context.
+
+**Match source indicator:** The HUD shows how the contact was matched — 📞 **Vault Dialer** or 📅 **{Meeting Title}**. Click ✕ to dismiss if it matched the wrong event and use manual search instead.
 
 ### During a Call
 1. The app captures your **microphone** via `getUserMedia`
@@ -126,6 +131,8 @@ When you press Done, Glass generates a concise AI summary and pushes it to Vault
 ### Stop vs Done
 - **Stop** — ends listening, keeps HUD visible (review transcript/insights)
 - **Done** — generates AI summary → pushes to CRM → hides HUD → resets for next call
+
+**Vault notes toggle:** When the Done button appears (after Stop), a document icon appears next to it in the header. Green = AI summary will be sent to Vault (default). Click to toggle off if you don't want notes pushed for this call. Hover for a tooltip explaining the current state. Resets to on for each new session.
 
 ## Keyboard Shortcuts
 

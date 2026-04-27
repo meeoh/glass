@@ -86,6 +86,53 @@ Returns a single JSON object with all data an AI sales coach needs:
 | `recent_emails` | `CRM::Email` | Last 10 emails: direction, subject, open/click status |
 | `notes` | `CRM::Note` | Last 10 notes: body (truncated), author, date |
 
+## Batch Contact Lookup Endpoint
+
+```
+GET /crm/api/contacts/batch_lookup
+```
+
+### Parameters
+
+| Param | Type | Description |
+|---|---|---|
+| `emails[]` | string[] | Array of email addresses (max 20) |
+
+Emails are tried in the order provided — the caller controls priority.
+
+### Response
+
+If a match is found:
+```json
+{
+  "matched": true,
+  "matched_email": "jane@acme.com",
+  "contact": { ... },
+  "account": { ... },
+  "shops": [...],
+  "deals": [...],
+  "recent_calls": [...],
+  "recent_emails": [...],
+  "notes": [...]
+}
+```
+
+If no match:
+```json
+{
+  "matched": false
+}
+```
+
+Single DB query: `CRM::Contact.where(email: emails)`, then picks the first match in the caller's order.
+
+### Testing
+
+```bash
+curl -H "Authorization: Bearer glass-dev-token" \
+  "http://u2-2.vault.localhost:3000/crm/api/contacts/batch_lookup?emails[]=jane@acme.com&emails[]=bob@test.com"
+```
+
 ## Active Call Endpoint
 
 ```

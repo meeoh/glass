@@ -93,6 +93,26 @@ Real-time talking points and suggestions based on the live conversation.
 - Listen pane is draggable (drag handle pill) and stays where user puts it
 - CRM side panel auto-populates on contact match
 
+## V3.1 — Calendar Matching + UX Polish ✅ DONE
+
+**Calendar matching improvements:**
+- Asymmetric time buffer: -2 min before start / +7 min after end (was ±5 min)
+- Batch attendee lookup: single `GET /crm/api/contacts/batch_lookup` instead of N+1 sequential requests
+- Fallback to sequential if batch endpoint unavailable
+
+**Match source indicator:**
+- Shows 📞 Vault Dialer or 📅 {Meeting Title} below the top bar
+- Dismissable with ✕ to clear wrong matches and use manual search
+
+**Vault notes toggle:**
+- Document icon next to Done button in the header pill
+- Green = AI summary will be sent to Vault (default)
+- Click to toggle off, hover for tooltip
+- Resets to on for each new session
+
+**Bug fix:**
+- Feature windows (listen, ask, settings) now created on showHUD if MicWatcher fires before header state transitions to 'main'
+
 ## V4 — Distribution & Polish (Next)
 
 **What to build:**

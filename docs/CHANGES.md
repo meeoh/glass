@@ -199,3 +199,52 @@ Pattern-matched against ~60 phrases from prospect speech. Fires immediately inst
 - Only the rep's own emails are excluded from attendee matching
 - All other attendees are candidates, including `@shopify.com` addresses
 - Previous behavior excluded all `@shopify.com` emails, which missed prospects with Shopify accounts
+
+## Changed: Asymmetric Calendar Buffer (V3.1)
+
+- **Before:** ±5 min symmetric buffer for "happening now" detection
+- **After:** -2 min before start / +7 min after end (asymmetric)
+- Tight before start (people rarely join calls early), generous after end (calls run late)
+- Back-to-back meetings still sorted by closest start time to now
+
+## Changed: Batch Calendar Attendee Lookup (V3.1)
+
+- **Before:** Sequential N+1 lookups — each attendee email tried one-by-one against `GET /crm/api/contacts/lookup`
+- **After:** All attendee emails sent in a single `GET /crm/api/contacts/batch_lookup?emails[]=...` request
+- Vault does a single `WHERE email IN (...)` query and returns the first match in caller's order
+- Falls back to sequential lookups if the batch endpoint is unavailable
+- Emails are ordered by event proximity (closest event's attendees first)
+
+**New Vault endpoint:** `GET /crm/api/contacts/batch_lookup` (branch `glass-contact-api` on u2-2)
+
+## Added: Match Source Indicator (V3.1)
+
+- When auto-match succeeds, a bar below the top bar shows the match source:
+  - 📞 **Vault Dialer** — matched via active call API
+  - 📅 **{Meeting Title}** — matched via calendar event
+- ✕ dismiss button clears the match and shows the manual contact search bar
+- Tracks which calendar event produced the match for accurate labeling
+
+**Changed files:**
+- `src/features/contactMatch/contactMatchService.js` — `getMatchMeta()`, `_matchedCalendarEvent` tracking
+- `src/ui/listen/ListenView.js` — `match-source-bar` UI, `clearMatchSource()` handler
+
+## Added: Vault Notes Toggle (V3.1)
+
+- Document icon appears in the header pill next to the Done button (only in afterSession state)
+- Green glow when active (default) — AI summary will be sent to Vault on Done
+- Dimmed when toggled off — summary won't be sent
+- Hover tooltip: "AI summary will be sent to Vault" / "AI summary will not be sent"
+- State synced to main process via `listen:setSendSummary` IPC channel
+- Resets to on for each new session
+
+**Changed files:**
+- `src/ui/app/MainHeader.js` — vault-toggle button, styles, `_handleVaultToggle()`
+- `src/bridge/featureBridge.js` — `_sendSummary` state, conditional summary generation on Done
+- `src/preload.js` — `listenView.setSendSummary()` IPC channel
+
+## Fixed: Feature Windows Not Created on Auto-Start (V3.1)
+
+- When MicWatcher detected a call before the header state transitioned to 'main', feature windows (listen, ask, settings) didn't exist yet
+- `showHUD()` now ensures feature windows are created before showing the HUD
+- Fixes the transcript/insights panel not appearing on auto-start race condition

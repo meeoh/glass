@@ -109,17 +109,27 @@ The parser routes LLM output by content type: quoted text → Say This, question
 
 **Google Workspace restrictions:** Shopify's Workspace admin must approve the Google Cloud project before `@shopify.com` accounts can authorize. Personal `@gmail.com` accounts work if added as test users on the OAuth consent screen.
 
-## Calendar Matching: ±5 Minute Buffer, Sorted by Proximity
+## Calendar Matching: Asymmetric Buffer, Sorted by Proximity
 
-**Decision:** Match calendar events happening within ±5 minutes of now. When multiple events overlap, sort by closest start time to now.
+**Decision:** Match calendar events using an asymmetric time buffer: 2 minutes before start, 7 minutes after end. When multiple events overlap, sort by closest start time to now.
 
-**Why ±5 minutes:** Tighter than the initial ±15 min — reduces false matches with back-to-back meetings. 5 minutes handles the common case of calls starting a few minutes late.
+**Why asymmetric:** People are often late to calls but rarely early. A symmetric ±5 min buffer created false matches with back-to-back meetings. The -2/+7 shape reflects real-world behavior: tight before (you're rarely joining 5 min early) and generous after (calls commonly run 5–7 min late).
 
-**Back-to-back meetings:** At 10:28 with a 10:00 meeting ending at 10:30 and a 10:30 meeting starting, both are "current." Sorting by closest start time ensures the 10:30 meeting (2 min away) is tried first.
+**Back-to-back meetings:** At 10:28 with a 10:00 meeting ending at 10:30 and a 10:30 meeting starting, both may be "current." Sorting by closest start time ensures the 10:30 meeting (2 min away) is tried first.
 
 **Attendee filtering:** Only the rep's own emails (Google auth email + `GLASS_REP_EMAIL`) are excluded. All other attendees are candidates — including `@shopify.com` addresses, since prospects may have Shopify accounts (partner agencies, Plus merchants, etc.).
 
 **Polling:** Every 5 minutes. Also polls immediately on first auth and on manual refresh.
+
+## Calendar Matching: Batch Lookup Instead of Sequential
+
+**Decision:** Send all calendar attendee emails to Vault in a single `GET /crm/api/contacts/batch_lookup` request instead of trying them one-by-one.
+
+**Why:** The sequential approach made N HTTP requests (one per attendee) which was slow and created unnecessary load on Vault. The batch endpoint does a single `WHERE email IN (...)` query and returns the first match in the caller's email order, so the caller controls priority (closest event's attendees first).
+
+**Fallback:** If the batch endpoint returns an error (e.g., older Vault without the endpoint), falls back to the sequential single-email lookup.
+
+**Max 20 emails:** Practical limit to prevent abuse. Calendar events with 20+ attendees are unlikely to be 1:1 sales calls.
 
 ## Auto-Match: Two Methods in Parallel, Vault Wins
 
