@@ -6,7 +6,8 @@ const EventEmitter = require('events');
 const googleAuthService = require('../googleAuth/googleAuthService');
 
 const POLL_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
-const EVENT_BUFFER_MINUTES = 5; // ±5 min buffer for "happening now"
+const EVENT_BUFFER_BEFORE_MINUTES = 2; // 2 min before start (tight — rarely early)
+const EVENT_BUFFER_AFTER_MINUTES = 7;  // 7 min after end (generous — calls run late)
 
 class CalendarService extends EventEmitter {
     constructor() {
@@ -55,20 +56,21 @@ class CalendarService extends EventEmitter {
     }
 
     /**
-     * Get events that are happening right now (±15 min buffer).
-     * Returns events with their attendee emails filtered to non-Shopify addresses.
+     * Get events that are happening right now (asymmetric buffer: -2 min before start, +7 min after end).
+     * Tight before start (people rarely join early), generous after end (calls run late).
      */
     getCurrentEvents() {
         const now = new Date();
-        const bufferMs = EVENT_BUFFER_MINUTES * 60 * 1000;
+        const beforeMs = EVENT_BUFFER_BEFORE_MINUTES * 60 * 1000;
+        const afterMs = EVENT_BUFFER_AFTER_MINUTES * 60 * 1000;
 
         return this.todayEvents
             .filter(event => {
                 const start = new Date(event.start);
                 const end = new Date(event.end);
-                // Event is "current" if now is within [start - buffer, end + buffer]
-                return now >= new Date(start.getTime() - bufferMs) &&
-                       now <= new Date(end.getTime() + bufferMs);
+                // Event is "current" if now is within [start - beforeBuffer, end + afterBuffer]
+                return now >= new Date(start.getTime() - beforeMs) &&
+                       now <= new Date(end.getTime() + afterMs);
             })
             // Sort by closest start time to now (prefer the meeting about to start / just started)
             .sort((a, b) => {

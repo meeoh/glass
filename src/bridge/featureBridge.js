@@ -80,6 +80,13 @@ module.exports = {
     ipcMain.handle('ask:toggleAskButton', async () => await askService.toggleAskButton());
     ipcMain.handle('ask:closeAskWindow',  async () => await askService.closeAskWindow());
     
+    // Listen — summary opt-out state from ListenView checkbox
+    let _sendSummary = true;
+    ipcMain.on('listen:setSendSummary', (event, value) => {
+      _sendSummary = value !== false;
+      console.log(`[FeatureBridge] Send summary preference: ${_sendSummary}`);
+    });
+
     // Listen
     ipcMain.handle('listen:sendMicAudio', async (event, { data, mimeType }) => await listenService.handleSendMicAudioContent(data, mimeType));
     ipcMain.handle('listen:sendSystemAudio', async (event, { data, mimeType }) => {
@@ -93,12 +100,13 @@ module.exports = {
     ipcMain.handle('listen:stopMacosSystemAudio', async () => await listenService.handleStopMacosAudio());
     ipcMain.handle('update-google-search-setting', async (event, enabled) => await listenService.handleUpdateGoogleSearchSetting(enabled));
     ipcMain.handle('listen:isSessionActive', async () => await listenService.isSessionActive());
-    ipcMain.handle('listen:changeSession', async (event, listenButtonText) => {
+    ipcMain.handle('listen:changeSession', async (event, listenButtonText, options = {}) => {
       console.log('[FeatureBridge] listen:changeSession from mainheader', listenButtonText);
       try {
         const callDetectionService = require('../features/callDetection/callDetectionService');
         const { notifyListenStateChanged, showHUD, hideHUD } = require('../window/windowManager');
         const isStarting = listenButtonText === 'Listen';
+        if (isStarting) _sendSummary = true; // Reset for new session
 
         // Grab conversation history BEFORE handleListenRequest clears it
         // (Stop calls closeSession which resets history)
@@ -123,39 +131,44 @@ module.exports = {
             console.log(`[FeatureBridge] Stashed ${conversationHistory.length} conversation turns for post-call summary`);
           }
         } else if (listenButtonText === 'Done') {
-          // Done = call is over — generate summary, push to CRM, then clean up
+          // Done = call is over — optionally generate summary, push to CRM, then clean up
           // Use stashed history from Stop, or current history if available
           const finalHistory = conversationHistory.length > 0 ? conversationHistory : (listenService._stashedConversationHistory || []);
-          
-          // Capture contact/match data NOW before we clear it
-          const calendarService = require('../features/calendar/calendarService');
-          const currentEvents = calendarService.getCurrentEvents();
-          const calendarEventId = currentEvents.length > 0 ? currentEvents[0].id : null;
+          const sendSummary = _sendSummary !== false; // reads from ListenView checkbox state
 
-          const summaryOptions = {
-            callId: contactMatchService._lastCallId || null,
-            matchSource: contactMatchService.getMatchSource(),
-            contactData: vaultService.getCurrentContact(),
-            repEmail: contactMatchService.getRepEmail(),
-            calendarEventId: calendarEventId,
-            durationSeconds: null,
-          };
+          if (sendSummary) {
+            // Capture contact/match data NOW before we clear it
+            const calendarService = require('../features/calendar/calendarService');
+            const currentEvents = calendarService.getCurrentEvents();
+            const calendarEventId = currentEvents.length > 0 ? currentEvents[0].id : null;
 
-          // Generate and push summary in the background (don't block the UI)
-          console.log(`[FeatureBridge] Generating post-call summary from ${finalHistory.length} turns`);
-          postCallSummaryService.generateAndPush(finalHistory, summaryOptions).then(result => {
-            if (result.success) {
-              console.log('[FeatureBridge] Post-call summary generated and pushed');
-              // Notify all windows
-              BrowserWindow.getAllWindows().forEach(win => {
-                if (win && !win.isDestroyed()) {
-                  win.webContents.send('glass:post-call-summary', result);
-                }
-              });
-            }
-          }).catch(err => {
-            console.error('[FeatureBridge] Post-call summary failed:', err.message);
-          });
+            const summaryOptions = {
+              callId: contactMatchService._lastCallId || null,
+              matchSource: contactMatchService.getMatchSource(),
+              contactData: vaultService.getCurrentContact(),
+              repEmail: contactMatchService.getRepEmail(),
+              calendarEventId: calendarEventId,
+              durationSeconds: null,
+            };
+
+            // Generate and push summary in the background (don't block the UI)
+            console.log(`[FeatureBridge] Generating post-call summary from ${finalHistory.length} turns`);
+            postCallSummaryService.generateAndPush(finalHistory, summaryOptions).then(result => {
+              if (result.success) {
+                console.log('[FeatureBridge] Post-call summary generated and pushed');
+                // Notify all windows
+                BrowserWindow.getAllWindows().forEach(win => {
+                  if (win && !win.isDestroyed()) {
+                    win.webContents.send('glass:post-call-summary', result);
+                  }
+                });
+              }
+            }).catch(err => {
+              console.error('[FeatureBridge] Post-call summary failed:', err.message);
+            });
+          } else {
+            console.log('[FeatureBridge] User opted out of post-call summary');
+          }
 
           hideHUD();
           contactMatchService.clearMatch();
@@ -368,6 +381,7 @@ module.exports = {
           matched: true,
           source: contactMatchService.getMatchSource(),
           contact: vaultService.getCurrentContact()?.contact,
+          matchMeta: contactMatchService.getMatchMeta(),
         } : null,
       };
     });

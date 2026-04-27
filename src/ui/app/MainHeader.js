@@ -5,6 +5,7 @@ export class MainHeader extends LitElement {
         isTogglingSession: { type: Boolean, state: true },
         shortcuts: { type: Object, state: true },
         listenSessionStatus: { type: String, state: true },
+        sendSummary: { type: Boolean, state: true },
     };
 
     static styles = css`
@@ -125,6 +126,82 @@ export class MainHeader extends LitElement {
 
         .listen-button.done:hover {
             background-color: #f0f0f0;
+        }
+
+        .vault-toggle {
+            -webkit-app-region: no-drag;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 26px;
+            border-radius: 9000px;
+            border: none;
+            cursor: pointer;
+            position: relative;
+            padding: 0;
+            transition: background 0.15s ease, opacity 0.15s ease;
+        }
+
+        .vault-toggle::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            border-radius: 9000px;
+            z-index: -1;
+            transition: background 0.15s ease;
+        }
+
+        .vault-toggle.active {
+            background: rgba(90, 190, 90, 0.2);
+        }
+
+        .vault-toggle.active::before {
+            background: rgba(90, 190, 90, 0.15);
+        }
+
+        .vault-toggle.active:hover {
+            background: rgba(90, 190, 90, 0.3);
+        }
+
+        .vault-toggle.inactive {
+            background: transparent;
+            opacity: 0.4;
+        }
+
+        .vault-toggle.inactive::before {
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .vault-toggle.inactive:hover {
+            opacity: 0.7;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .vault-toggle svg {
+            width: 13px;
+            height: 13px;
+        }
+
+        .vault-tooltip {
+            position: absolute;
+            bottom: -28px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.85);
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 10px;
+            font-weight: 400;
+            padding: 3px 8px;
+            border-radius: 4px;
+            white-space: nowrap;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.15s ease;
+        }
+
+        .vault-toggle:hover .vault-tooltip {
+            opacity: 1;
         }
 
         .listen-button:hover::before {
@@ -293,7 +370,8 @@ export class MainHeader extends LitElement {
         :host-context(body.has-glass) .header,
         :host-context(body.has-glass) .listen-button,
         :host-context(body.has-glass) .header-actions,
-        :host-context(body.has-glass) .settings-button {
+        :host-context(body.has-glass) .settings-button,
+        :host-context(body.has-glass) .vault-toggle {
             background: transparent !important;
             filter: none !important;
             box-shadow: none !important;
@@ -349,6 +427,7 @@ export class MainHeader extends LitElement {
         this.settingsHideTimer = null;
         this.isTogglingSession = false;
         this.listenSessionStatus = 'beforeSession';
+        this.sendSummary = true;
         this.animationEndTimer = null;
         this.handleAnimationEnd = this.handleAnimationEnd.bind(this);
         this.handleMouseMove = this.handleMouseMove.bind(this);
@@ -475,15 +554,21 @@ export class MainHeader extends LitElement {
 
             this._sessionStateTextListener = (event, { success }) => {
                 if (success) {
-                    this.listenSessionStatus = ({
+                    const next = ({
                         beforeSession: 'inSession',
                         inSession: 'afterSession',
                         afterSession: 'beforeSession',
                     })[this.listenSessionStatus] || 'beforeSession';
+                    // Reset vault notes toggle for new session
+                    if (next === 'inSession') {
+                        this.sendSummary = true;
+                        if (window.api) window.api.listenView.setSendSummary(true);
+                    }
+                    this.listenSessionStatus = next;
                 } else {
                     this.listenSessionStatus = 'beforeSession';
                 }
-                this.isTogglingSession = false; // ✨ 로딩 상태만 해제
+                this.isTogglingSession = false;
             };
             window.api.mainHeader.onListenChangeSessionResult(this._sessionStateTextListener);
 
@@ -529,6 +614,12 @@ export class MainHeader extends LitElement {
             console.log(`[MainHeader] hideSettingsWindow called at ${Date.now()}`);
             window.api.mainHeader.hideSettingsWindow();
         }
+    }
+
+    _handleVaultToggle() {
+        if (this.wasJustDragged) return;
+        this.sendSummary = !this.sendSummary;
+        if (window.api) window.api.listenView.setSendSummary(this.sendSummary);
     }
 
     async _handleListenClick() {
@@ -641,6 +732,23 @@ export class MainHeader extends LitElement {
                             </div>
                         `}
                 </button>
+
+                ${listenButtonText === 'Done' ? html`
+                    <button
+                        class="vault-toggle ${this.sendSummary ? 'active' : 'inactive'}"
+                        @click=${this._handleVaultToggle}
+                        title=${this.sendSummary ? 'Notes will be sent to Vault' : 'Notes will not be sent to Vault'}
+                    >
+                        <svg viewBox="0 0 24 24" fill="none" stroke=${this.sendSummary ? 'rgba(90, 210, 90, 0.9)' : 'rgba(255, 255, 255, 0.7)'} stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                            <polyline points="14 2 14 8 20 8" />
+                            <line x1="16" y1="13" x2="8" y2="13" />
+                            <line x1="16" y1="17" x2="8" y2="17" />
+                            <polyline points="10 9 9 9 8 9" />
+                        </svg>
+                        <span class="vault-tooltip">${this.sendSummary ? 'Vault notes on' : 'Vault notes off'}</span>
+                    </button>
+                ` : ''}
 
                 <div class="header-actions ask-action" @click=${() => this._handleAskClick()}>
                     <div class="action-text">

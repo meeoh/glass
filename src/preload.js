@@ -114,7 +114,7 @@ contextBridge.exposeInMainWorld('api', {
     
     // Generic invoke (for dynamic channel names)
     // invoke: (channel, ...args) => ipcRenderer.invoke(channel, ...args),
-    sendListenButtonClick: (listenButtonText) => ipcRenderer.invoke('listen:changeSession', listenButtonText),
+    sendListenButtonClick: (listenButtonText, options) => ipcRenderer.invoke('listen:changeSession', listenButtonText, options),
     sendAskButtonClick: () => ipcRenderer.invoke('ask:toggleAskButton'),
     sendToggleAllWindowsVisibility: () => ipcRenderer.invoke('shortcut:toggleAllWindowsVisibility'),
     
@@ -176,6 +176,9 @@ contextBridge.exposeInMainWorld('api', {
     adjustWindowHeight: (winName, height) => ipcRenderer.invoke('adjust-window-height', { winName, height }),
     adjustWindowWidth: (winName, width) => ipcRenderer.invoke('adjust-window-width', { winName, width }),
     
+    // Summary opt-out
+    setSendSummary: (value) => ipcRenderer.send('listen:setSendSummary', value),
+
     // Listeners
     onSessionStateChanged: (callback) => ipcRenderer.on('session-state-changed', callback),
     removeOnSessionStateChanged: (callback) => ipcRenderer.removeListener('session-state-changed', callback)

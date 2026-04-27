@@ -469,6 +469,46 @@ export class ListenView extends LitElement {
             font-size: 10px;
             padding: 4px 12px;
         }
+
+        .match-source-bar {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .match-source-icon {
+            font-size: 11px;
+            flex-shrink: 0;
+        }
+
+        .match-source-label {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            min-width: 0;
+            flex: 1;
+        }
+
+        .match-source-clear {
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.25);
+            font-size: 11px;
+            cursor: pointer;
+            padding: 0 2px;
+            flex-shrink: 0;
+            line-height: 1;
+        }
+
+        .match-source-clear:hover {
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+
         
         /* ────────────────[ GLASS BYPASS ]─────────────── */
         :host-context(body.has-glass) .assistant-container,
@@ -613,6 +653,7 @@ export class ListenView extends LitElement {
         contactHighlights: { type: Object },
         contactError: { type: String },
         contactExpanded: { type: Boolean },
+        matchMeta: { type: Object },
     };
 
     constructor() {
@@ -634,6 +675,7 @@ export class ListenView extends LitElement {
         this.contactHighlights = null;
         this.contactError = '';
         this.contactExpanded = false;
+        this.matchMeta = null;
 
         this.adjustWindowHeight = this.adjustWindowHeight.bind(this);
     }
@@ -679,6 +721,14 @@ export class ListenView extends LitElement {
         );
     }
 
+    clearMatchSource() {
+        this.matchMeta = null;
+        this.requestUpdate();
+        this.updateComplete.then(() => {
+            setTimeout(() => this.adjustWindowHeight(), 50);
+        });
+    }
+
     clearContact() {
         this.contactQuery = '';
         this.contactHighlights = null;
@@ -711,12 +761,24 @@ export class ListenView extends LitElement {
                 }
             });
 
+            // Listen for match result with metadata (source type + event name)
+            window.api.glass.onMatchResult((event, result) => {
+                if (result.matched && result.matchMeta) {
+                    this.matchMeta = result.matchMeta;
+                    this.requestUpdate();
+                    this.updateComplete.then(() => {
+                        setTimeout(() => this.adjustWindowHeight(), 50);
+                    });
+                }
+            });
+
             window.api.listenView.onSessionStateChanged((event, { isActive }) => {
                 const wasActive = this.isSessionActive;
                 this.isSessionActive = isActive;
 
                 if (!wasActive && isActive) {
                     this.hasCompletedRecording = false;
+                    this.matchMeta = null;
                     this.startTimer();
                     // Reset child components
                     this.updateComplete.then(() => {
@@ -914,6 +976,14 @@ export class ListenView extends LitElement {
                             </div>
                         </div>
 
+                        ${this.matchMeta ? html`
+                            <div class="match-source-bar">
+                                <span class="match-source-icon">${this.matchMeta.source === 'vault_active_call' ? '📞' : '📅'}</span>
+                                <span class="match-source-label">${this.matchMeta.source === 'vault_active_call' ? 'Vault Dialer' : this.matchMeta.label}</span>
+                                <button class="match-source-clear" @click=${this.clearMatchSource} title="Dismiss match">✕</button>
+                            </div>
+                        ` : ''}
+
                         ${!this.contactHighlights ? html`
                             <form class="contact-bar" @submit=${this.handleContactLookup}>
                                 <input
@@ -943,6 +1013,7 @@ export class ListenView extends LitElement {
                                 .hasCompletedRecording=${this.hasCompletedRecording}
                             ></summary-view>
                         </div>
+
                     </div>
 
                     ${this.contactHighlights ? html`

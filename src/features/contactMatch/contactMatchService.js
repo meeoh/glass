@@ -22,6 +22,7 @@ class ContactMatchService extends EventEmitter {
         this._matchSource = null; // 'vault_active_call' | 'calendar' | 'manual' | null
         this._repEmail = null; // Can be set independently of Google auth
         this._lastCallId = null; // CRM::Call ID from active call match
+        this._matchedCalendarEvent = null; // Calendar event that produced the match
     }
 
     /**
@@ -81,6 +82,8 @@ class ContactMatchService extends EventEmitter {
             if (calendarResult.status === 'fulfilled' && calendarResult.value) {
                 console.log(`[ContactMatch] ✅ Matched via Calendar: ${calendarResult.value.contact?.name}`);
                 this._matchSource = 'calendar';
+                this._matchedCalendarEvent = calendarResult.value._calendarEvent || null;
+                delete calendarResult.value._calendarEvent; // Don't leak internal field
                 await this._applyMatch(calendarResult.value);
                 return calendarResult.value;
             }
@@ -109,6 +112,22 @@ class ContactMatchService extends EventEmitter {
         this._matchSource = null;
         this._isMatching = false;
         this._lastCallId = null;
+        this._matchedCalendarEvent = null;
+    }
+
+    /**
+     * Get metadata about the current match for UI display.
+     */
+    getMatchMeta() {
+        if (!this._matchSource) return null;
+        if (this._matchSource === 'vault_active_call') {
+            return { source: 'vault_active_call', label: 'Vault Dialer' };
+        }
+        if (this._matchSource === 'calendar') {
+            const eventName = this._matchedCalendarEvent?.summary || 'Calendar Event';
+            return { source: 'calendar', label: eventName, meetLink: this._matchedCalendarEvent?.meetLink || null };
+        }
+        return { source: this._matchSource, label: this._matchSource };
     }
 
     // ─── Method 1: Vault Active Call API ───
@@ -159,27 +178,95 @@ class ContactMatchService extends EventEmitter {
             return null;
         }
 
-        // Get external attendee emails from events happening right now
-        const emails = calendarService.getCurrentExternalAttendees();
-        if (emails.length === 0) {
+        // Get current events sorted by proximity, then collect attendee emails in order
+        const currentEvents = calendarService.getCurrentEvents();
+        if (currentEvents.length === 0) {
+            console.log('[ContactMatch] No current calendar events');
+            return null;
+        }
+
+        const repEmail = googleAuthService.getUserEmail()?.toLowerCase();
+        const repShopifyEmail = this.getRepEmail()?.toLowerCase();
+
+        // Build ordered email list from closest event first, preserving which event each email came from
+        const emailEventMap = new Map(); // email → event
+        const orderedEmails = [];
+
+        for (const event of currentEvents) {
+            for (const attendee of (event.attendees || [])) {
+                const email = attendee.email?.toLowerCase();
+                if (email &&
+                    email !== repEmail &&
+                    email !== repShopifyEmail &&
+                    !attendee.self &&
+                    !emailEventMap.has(email)) {
+                    emailEventMap.set(email, event);
+                    orderedEmails.push(email);
+                }
+            }
+        }
+
+        if (orderedEmails.length === 0) {
             console.log('[ContactMatch] No external attendees in current calendar events');
             return null;
         }
 
-        console.log(`[ContactMatch] Trying calendar attendees: ${emails.join(', ')}`);
+        console.log(`[ContactMatch] Batch looking up ${orderedEmails.length} calendar attendees: ${orderedEmails.join(', ')}`);
 
-        // Try each email against the Vault contact lookup
+        // Single batch request to Vault — it returns the first match in our email order
+        try {
+            const emailParams = orderedEmails.map(e => `emails[]=${encodeURIComponent(e)}`).join('&');
+            const url = `${VAULT_BASE_URL}/crm/api/contacts/batch_lookup?${emailParams}`;
+            const response = await fetch(url, {
+                headers: {
+                    'Authorization': `Bearer ${VAULT_API_TOKEN}`,
+                    'Accept': 'application/json',
+                },
+                timeout: 8000,
+            });
+
+            if (!response.ok) {
+                throw new Error(`Vault batch lookup error: ${response.status}`);
+            }
+
+            const data = await response.json();
+            if (data.matched && data.contact) {
+                // Attach the calendar event that this match came from (for UI display)
+                const matchedEmail = data.matched_email;
+                data._calendarEvent = emailEventMap.get(matchedEmail) || currentEvents[0];
+
+                // Also set on vaultService so LLM and UI can use it
+                vaultService.currentContact = data;
+                vaultService._notifyListeners(data);
+
+                return data;
+            }
+
+            console.log('[ContactMatch] Batch lookup: no contacts found in Vault');
+            return null;
+        } catch (err) {
+            console.error('[ContactMatch] Batch calendar lookup failed:', err.message);
+            // Fallback: try the old sequential method
+            return this._matchViaCalendarFallback(orderedEmails, emailEventMap);
+        }
+    }
+
+    /**
+     * Fallback sequential lookup if the batch endpoint isn't available.
+     */
+    async _matchViaCalendarFallback(emails, emailEventMap) {
+        console.log('[ContactMatch] Falling back to sequential calendar lookup');
         for (const email of emails) {
             try {
                 const data = await vaultService.lookupContact({ email });
                 if (data && data.contact) {
+                    data._calendarEvent = emailEventMap?.get(email) || null;
                     return data;
                 }
             } catch (err) {
                 console.log(`[ContactMatch] Calendar lookup failed for ${email}:`, err.message);
             }
         }
-
         return null;
     }
 
@@ -198,6 +285,7 @@ class ContactMatchService extends EventEmitter {
             matched: true,
             source: this._matchSource,
             contact: contactData.contact,
+            matchMeta: this.getMatchMeta(),
         });
     }
 }
