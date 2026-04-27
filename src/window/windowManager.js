@@ -940,12 +940,16 @@ function hideHUD() {
  * Used when the user clicks "Show HUD" from the main app window.
  */
 function showAllWindows() {
-    ['header', 'listen', 'ask'].forEach(name => {
-        const win = windowPool.get(name);
-        if (win && !win.isDestroyed()) {
-            win.showInactive();
-        }
-    });
+    const header = windowPool.get('header');
+    if (header && !header.isDestroyed()) {
+        header.showInactive();
+    }
+    // Use the proper visibility flow for the listen window so it gets
+    // positioned by the layout manager (showInactive alone leaves it off-screen)
+    const listen = windowPool.get('listen');
+    if (listen && !listen.isDestroyed() && !listen.isVisible()) {
+        handleWindowVisibilityRequest(windowPool, layoutManager, movementManager, 'listen', true);
+    }
 }
 
 function notifyListenStateChanged(isListening) {
