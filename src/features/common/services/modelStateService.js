@@ -30,7 +30,15 @@ class ModelStateService extends EventEmitter {
      */
     async _ensureProxyKeySeeded() {
         const PROXY_TOKEN = process.env.SHOPIFY_PROXY_TOKEN || '';
-        const DEEPGRAM_KEY = process.env.DEEPGRAM_API_KEY || '';
+
+        // Deepgram key: env var > build-time config file
+        let DEEPGRAM_KEY = process.env.DEEPGRAM_API_KEY || '';
+        if (!DEEPGRAM_KEY) {
+            try {
+                const dgConfig = require('../../listen/stt/deepgram-config.json');
+                DEEPGRAM_KEY = dgConfig.api_key || '';
+            } catch (e) { /* config not generated yet */ }
+        }
 
         // Seed or update OpenAI proxy token for LLM
         const existingOpenai = await providerSettingsRepository.getByProvider('openai');

@@ -426,8 +426,7 @@ module.exports = {
     // Initial state for main window
     ipcMain.handle('glass:get-initial-state', async () => {
       const openai = await providerSettingsRepository.getByProvider('openai');
-      const deepgram = await providerSettingsRepository.getByProvider('deepgram');
-      const setupComplete = !!(openai && openai.api_key && deepgram && deepgram.api_key);
+      const setupComplete = !!(openai && openai.api_key);
       return {
         setupComplete,
         isAuthorized: googleAuthService.isAuthorized(),

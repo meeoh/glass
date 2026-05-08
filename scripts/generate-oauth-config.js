@@ -1,35 +1,46 @@
 #!/usr/bin/env node
-// Generates oauth-config.json from environment variables at build time.
-// This file gets packaged into the app so users don't need to configure OAuth.
+// Generates build-time config files from environment variables.
+// These files get packaged into the app so users don't need to configure them.
 //
 // Usage:
-//   GOOGLE_CLIENT_ID=xxx GOOGLE_CLIENT_SECRET=yyy npm run build
+//   GOOGLE_CLIENT_ID=xxx GOOGLE_CLIENT_SECRET=yyy DEEPGRAM_API_KEY=zzz npm run build
 //
-// For local development, create the file manually or use .env with dotenv.
+// For local development, create the files manually or use .env with dotenv.
 
 const fs = require('fs');
 const path = require('path');
 
-const configPath = path.join(__dirname, '..', 'src', 'features', 'googleAuth', 'oauth-config.json');
+// --- Google OAuth config ---
+const oauthConfigPath = path.join(__dirname, '..', 'src', 'features', 'googleAuth', 'oauth-config.json');
 
 const clientId = process.env.GOOGLE_CLIENT_ID;
 const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
 if (!clientId || !clientSecret) {
-    // Check if config already exists (dev created it manually)
-    if (fs.existsSync(configPath)) {
-        console.log('[oauth-config] oauth-config.json already exists, skipping generation.');
-        process.exit(0);
+    if (fs.existsSync(oauthConfigPath)) {
+        console.log('[build-config] oauth-config.json already exists, skipping.');
+    } else {
+        console.error('[build-config] ERROR: GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET env vars are required for build.');
+        process.exit(1);
     }
-    console.error('[oauth-config] ERROR: GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET env vars are required for build.');
-    console.error('[oauth-config] For local dev, create src/features/googleAuth/oauth-config.json manually.');
-    process.exit(1);
+} else {
+    fs.writeFileSync(oauthConfigPath, JSON.stringify({ client_id: clientId, client_secret: clientSecret }, null, 2) + '\n');
+    console.log('[build-config] Generated oauth-config.json');
 }
 
-const config = {
-    client_id: clientId,
-    client_secret: clientSecret,
-};
+// --- Deepgram config ---
+const deepgramConfigPath = path.join(__dirname, '..', 'src', 'features', 'listen', 'stt', 'deepgram-config.json');
 
-fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
-console.log('[oauth-config] Generated oauth-config.json for packaging.');
+const deepgramKey = process.env.DEEPGRAM_API_KEY;
+
+if (!deepgramKey) {
+    if (fs.existsSync(deepgramConfigPath)) {
+        console.log('[build-config] deepgram-config.json already exists, skipping.');
+    } else {
+        console.error('[build-config] ERROR: DEEPGRAM_API_KEY env var is required for build.');
+        process.exit(1);
+    }
+} else {
+    fs.writeFileSync(deepgramConfigPath, JSON.stringify({ api_key: deepgramKey }, null, 2) + '\n');
+    console.log('[build-config] Generated deepgram-config.json');
+}

@@ -118,3 +118,4 @@ src/native/MicWatcher
 !src/native/MicWatcher.swift
 .env.bak
 src/features/googleAuth/oauth-config.json
+src/features/listen/stt/deepgram-config.json

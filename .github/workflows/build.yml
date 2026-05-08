@@ -28,10 +28,11 @@ jobs:
       - name: Ensure web output directory
         run: mkdir -p pickleglass_web/out && echo '<html><body></body></html>' > pickleglass_web/out/index.html
 
-      - name: Generate OAuth config
+      - name: Generate build-time configs
         env:
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          DEEPGRAM_API_KEY: ${{ secrets.DEEPGRAM_API_KEY }}
         run: node scripts/generate-oauth-config.js
 
       - name: Build macOS DMG
