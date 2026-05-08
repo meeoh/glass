@@ -123,6 +123,7 @@ Real-time talking points and suggestions based on the live conversation.
 - ✅ Google OAuth creds loaded from config file (generated at build time, gitignored)
 - ✅ Disabled Cmd+Shift+Left/Right shortcuts (conflicted with system text selection)
 - ✅ GitHub Actions CI workflow for building macOS DMG
+- ✅ Deepgram API key baked in at build time (shared team key, not per-user)
 
 **Remaining:**
 - Auto-stop call detection (see V2.5)

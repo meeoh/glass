@@ -31,15 +31,24 @@ The upstream Glass codebase was audited before modification. **No malicious beha
 
 ### Credentials
 
-All sensitive credentials are passed via environment variables (`.env` file, gitignored):
+**Baked in at build time** (via `scripts/generate-oauth-config.js`, gitignored config files):
 
 | Key | Purpose |
 |---|---|
-| `SHOPIFY_PROXY_TOKEN` | Shopify AI proxy token for LLM access |
-| `DEEPGRAM_API_KEY` | Deepgram API key for real-time STT |
-| `GOOGLE_CLIENT_ID` | Google OAuth2 client ID |
-| `GOOGLE_CLIENT_SECRET` | Google OAuth2 client secret |
-| `GLASS_REP_EMAIL` | Rep's Shopify email for Vault active call lookup |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth2 app credentials (shared, not per-user) |
+| `DEEPGRAM_API_KEY` | Deepgram API key for real-time STT (shared team key) |
+
+**Per-user** (entered during onboarding, stored in SQLite):
+
+| Key | Purpose |
+|---|---|
+| `SHOPIFY_PROXY_TOKEN` | Shopify AI proxy token for LLM access (tied to user's email) |
+
+**Derived from Google OAuth** (not manually entered):
+
+| Key | Purpose |
+|---|---|
+| Rep email | Used for Vault active call lookup (from Google profile) |
 
 No hardcoded credentials remain in source. All secrets are provided via environment variables or the in-app onboarding wizard (stored encrypted in SQLite).
 
