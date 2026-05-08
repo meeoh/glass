@@ -23,8 +23,10 @@ protocols:
 files:
     - src/**/*
     - package.json
+    - node_modules/**/*
     - pickleglass_web/backend_node/**/*
     - '!**/node_modules/electron/**'
+    - '!**/node_modules/electron-builder/**'
     - public/build/**/*
 
 # Additional resources to be copied into the app's resources directory
