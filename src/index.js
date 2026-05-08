@@ -5,7 +5,7 @@
 // } catch (err) {
 // }
 
-require('dotenv').config();
+try { require('dotenv').config(); } catch (e) { /* dotenv optional in packaged app */ }
 
 // Prevent EPIPE crashes when stdout/stderr pipe is broken
 process.stdout?.on?.('error', () => {});
