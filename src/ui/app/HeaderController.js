@@ -261,19 +261,10 @@ class HeaderTransitionManager {
             const permissions = await window.api.headerController.checkSystemPermissions();
             console.log('[HeaderController] Current permissions:', permissions);
             
-            if (!permissions.needsSetup) {
-                return { success: true };
-            }
-
-            let errorMessage = '';
-            if (!permissions.microphone && !permissions.screen) {
-                errorMessage = 'Microphone and screen recording access required';
-            }
-            
-            return { 
-                success: false, 
-                error: errorMessage
-            };
+            // Skip permission gate — permissions are handled by the main window
+            // onboarding and by macOS prompts when the user actually starts listening.
+            // Don't block the HUD from showing.
+            return { success: true };
         } catch (error) {
             console.error('[HeaderController] Error checking permissions:', error);
             return { 

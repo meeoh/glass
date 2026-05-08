@@ -73,7 +73,7 @@ class PermissionService {
     }
 
     try {
-      if (section === 'screen-recording') {
+      if (section === 'screen-recording' || section === 'screen') {
         try {
           console.log('[Permissions] Triggering screen capture request to register app...');
           await desktopCapturer.getSources({
@@ -85,7 +85,8 @@ class PermissionService {
           console.log('[Permissions] Screen capture request triggered (expected to fail):', captureError.message);
         }
         
-        // await shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
+        const { shell } = require('electron');
+        await shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
       }
       return { success: true };
     } catch (error) {
