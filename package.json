@@ -9,6 +9,7 @@
         "start": "npm run build:renderer && electron .",
         "package": "npm run build:all && electron-builder --dir",
         "make": "npm run build:renderer && electron-forge make",
+        "prebuild": "node scripts/generate-oauth-config.js",
         "build": "npm run build:all && electron-builder --config electron-builder.yml --publish never",
         "build:win": "npm run build:all && electron-builder --win --x64 --publish never",
         "publish": "npm run build:all && electron-builder --config electron-builder.yml --publish always",

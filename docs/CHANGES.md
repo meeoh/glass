@@ -312,3 +312,15 @@ Wizard only shows when no API keys are configured. Once keys are saved, shows th
 | `README.md` | Complete rewrite for Sales Assistant |
 
 Internal identifiers (`pickle-glass-app` custom element, `pickleGlassApp` IPC namespace, `window.pickleGlass`) left unchanged to avoid breaking the component/IPC contract.
+
+## Changed: Google OAuth Credentials Baked In (V4)
+
+- `src/features/googleAuth/googleAuthService.js` — Google Client ID and Secret now have real defaults baked into the source instead of placeholder strings
+- Users no longer need `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` in `.env`
+- Env vars still override if present (for development with a different OAuth app)
+
+## Removed: Cmd+Shift+Left/Right Global Shortcuts (V4)
+
+- `src/features/shortcuts/shortcutsService.js` — disabled edge-snapping shortcuts (`Cmd+Shift+Left`, `Cmd+Shift+Right`)
+- These conflicted with macOS system text selection shortcuts
+- Edge snapping via keyboard is no longer available (drag the window instead)

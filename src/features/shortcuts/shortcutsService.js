@@ -177,16 +177,16 @@ class ShortcutsService {
             });
         }
 
-        // Edge snapping
-        const edgeDirections = [
-            { key: `${modifier}+Shift+Left`, direction: 'left' },
-            { key: `${modifier}+Shift+Right`, direction: 'right' },
-        ];
-        edgeDirections.forEach(({ key, direction }) => {
-            globalShortcut.register(key, () => {
-                if (header && header.isVisible()) internalBridge.emit('window:moveToEdge', { direction });
-            });
-        });
+        // Edge snapping (disabled — conflicts with system text selection shortcuts)
+        // const edgeDirections = [
+        //     { key: `${modifier}+Shift+Left`, direction: 'left' },
+        //     { key: `${modifier}+Shift+Right`, direction: 'right' },
+        // ];
+        // edgeDirections.forEach(({ key, direction }) => {
+        //     globalShortcut.register(key, () => {
+        //         if (header && header.isVisible()) internalBridge.emit('window:moveToEdge', { direction });
+        //     });
+        // });
 
         // --- User-configurable shortcuts ---
         if (header?.currentHeaderState === 'apikey') {

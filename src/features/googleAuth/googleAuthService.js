@@ -9,8 +9,10 @@ const EventEmitter = require('events');
 const sqliteClient = require('../common/services/sqliteClient');
 
 // Placeholder OAuth2 credentials — replace before distribution
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || 'YOUR_CLIENT_ID.apps.googleusercontent.com';
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || 'YOUR_CLIENT_SECRET';
+let oauthConfig = {};
+try { oauthConfig = require('./oauth-config.json'); } catch (e) { /* not yet generated */ }
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || oauthConfig.client_id || '';
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || oauthConfig.client_secret || '';
 // Redirect URI uses a local HTTP server on a dynamic port
 // The actual URI is set at auth time (http://localhost:<port>/oauth/callback)
 let REDIRECT_URI = 'http://localhost/oauth/callback';
