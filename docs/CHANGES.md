@@ -388,3 +388,51 @@ The upstream Glass app shipped with a native binary (`src/ui/assets/SystemAudioD
 - Added `prebuild` script that runs `scripts/generate-oauth-config.js`
 - `scripts/generate-oauth-config.js` — generates `oauth-config.json` from `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` env vars
 - Config file is gitignored; only exists at build time or for local dev
+
+## Fixed: DMG Packaging Issues (V4)
+
+**MicWatcher not executing in packaged app:**
+- Binary was trapped inside the `.asar` archive (can't execute from asar)
+- Added `src/native/MicWatcher` and `src/native/MicWatcher.swift` to `asarUnpack` in `electron-builder.yml`
+- Also unpacked `better-sqlite3` native module (needs to load outside asar)
+
+**dotenv crash on launch:**
+- Packaged app has no `.env` file, `require('dotenv').config()` threw
+- Wrapped in try/catch in `src/index.js`
+
+**node_modules not bundled:**
+- Removed explicit `node_modules/**/*` from `files` config — let electron-builder handle dependency bundling automatically
+- Removed `--ignore-scripts` from CI workflow so `postinstall` runs `electron-builder install-app-deps` (rebuilds native modules for Electron)
+
+**pnpm-lock.yaml conflict:**
+- Both `pnpm-lock.yaml` and `package-lock.json` existed, confusing electron-builder
+- Deleted `pnpm-lock.yaml`, using npm consistently
+
+## Fixed: Repeated Mic Permission Prompts on Auto-Start (V4)
+
+- `src/index.js` — auto-start now checks `systemPreferences.getMediaAccessStatus('microphone')` before calling `handleListenRequest`
+- If mic permission is not `'granted'`, auto-start is skipped silently
+- Prevents the repeated permission dialog when MicWatcher fires before user has granted mic access
+- User grants mic permission during onboarding, then auto-start works on subsequent calls
+
+## Fixed: HUD Permission Gate Blocking Usage (V4)
+
+- `src/ui/app/HeaderController.js` — bypassed the `checkPermissions()` gate in the HUD header controller
+- The HUD no longer shows its own permission setup screen
+- Permissions are handled exclusively by the main window onboarding flow
+- Once onboarding is complete, the HUD always transitions directly to the main state
+
+## Fixed: "Open Settings" Button in Onboarding (V4)
+
+- `src/features/common/services/permissionService.js` — accepted `'screen'` param (was only checking `'screen-recording'`)
+- Uncommented `shell.openExternal()` call to actually open System Settings
+- Added `glass:request-screen-permission` IPC handler that registers the app with macOS AND opens Screen Recording settings
+- Added `glass:recheck-permissions` IPC handler for polling permission status
+
+## Changed: Onboarding Requires Mic Permission for Completion (V4)
+
+- `src/bridge/featureBridge.js` — `setupComplete` now checks both proxy token AND mic permission
+- `src/ui/main/main.html` — if keys are present but mic isn't granted, onboarding starts at Step 2 (permissions)
+- Polling (every 2s) checks for permission changes while user is in System Settings
+- "Continue" button only appears when both mic and screen recording are granted
+- Ensures the user is fully set up before the main app view shows

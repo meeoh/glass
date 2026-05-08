@@ -235,3 +235,56 @@ The parser routes LLM output by content type: quoted text → Say This, question
 **On startup:** `googleAuthService.initialize()` restores tokens from SQLite. If the access token is expired, it auto-refreshes using the refresh token. If the refresh token is revoked, the user is signed out cleanly.
 
 **Sign out:** Clears both in-memory state and the SQLite row.
+
+## Onboarding: What's Per-User vs Baked-In
+
+**Decision:** Only the Shopify Proxy Token is per-user. Everything else is baked into the app at build time.
+
+**Baked in (build-time, via GitHub secrets → config files):**
+- Google OAuth Client ID/Secret — app-level credential, same for all users
+- Deepgram API Key — shared team STT key, same for all users
+
+**Per-user (entered during onboarding, stored in SQLite):**
+- Shopify AI Proxy Token — tied to individual user's email, has expiry, generated at proxy.shopify.ai
+
+**Why:** The proxy token is a personal JWT containing the user's email and an expiry date. It can't be shared. Deepgram and Google OAuth are app-level credentials that identify the application, not the user.
+
+## Build Distribution: GitHub Actions Required
+
+**Decision:** Use GitHub Actions CI to build the macOS DMG. Cannot build on Shopify-managed Macs.
+
+**Why:** Shopify's MDM kills the `app-builder` binary (unsigned) that electron-builder needs to package the app. The binary gets Killed:9 immediately, even after re-signing with `codesign --force --sign -`.
+
+**Workaround:** GitHub Actions macOS runners have no MDM, so the build succeeds there. DMG is uploaded as an artifact.
+
+**Future:** Code-signing with a Shopify Apple Developer certificate would make the app pass Gatekeeper on managed Macs without "Open Anyway".
+
+## Coaching Trigger: Prospect Speech Only
+
+**Decision:** Coaching triggers after the prospect speaks (8+ words), not the rep.
+
+**Rationale:**
+- The rep needs coaching *before* they respond — so it must fire after the prospect finishes
+- Triggering after the rep speaks is useless — they've already said it
+- Short responses ("yeah", "okay") are filtered out to avoid noise
+- Smart triggers (objection keywords) still fire immediately regardless of length
+- 5-second debounce prevents LLM spam from rapid prospect sentences
+
+**Previous behavior:** Every 2 turns from either side.
+
+## Vault CRM: Disabled by Default
+
+**Decision:** All Vault CRM features are disabled when `VAULT_API_TOKEN` is not set.
+
+**Why:** The app is being distributed before the Vault API endpoint is production-ready. Disabling by default prevents errors and unnecessary network calls. Re-enable by setting the env var.
+
+**What's disabled:** Contact lookup, auto-match, post-call summary push.
+**What still works:** Transcription, AI coaching, smart triggers, calendar display.
+
+## Permissions: macOS App Identity
+
+**Decision:** Permissions are per-app-identity on macOS. The packaged DMG ("Sales Assistant.app") needs its own grants, separate from local dev ("Electron").
+
+**Implication:** The onboarding flow must handle permissions properly because a fresh install of the DMG has zero permissions granted. The `tccutil reset` approach for testing locally doesn't reliably work — true testing requires the packaged app.
+
+**Auto-start guard:** MicWatcher detection skips auto-start if mic permission isn't granted yet. This prevents the repeated permission dialog that occurred when MicWatcher fired before the user completed onboarding.
