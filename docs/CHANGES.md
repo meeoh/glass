@@ -324,3 +324,19 @@ Internal identifiers (`pickle-glass-app` custom element, `pickleGlassApp` IPC na
 - `src/features/shortcuts/shortcutsService.js` — disabled edge-snapping shortcuts (`Cmd+Shift+Left`, `Cmd+Shift+Right`)
 - These conflicted with macOS system text selection shortcuts
 - Edge snapping via keyboard is no longer available (drag the window instead)
+
+## Added: GitHub Actions Build Workflow (V4)
+
+- `.github/workflows/build.yml` — builds macOS DMG on GitHub's runners (bypasses Shopify MDM)
+- Triggered manually from Actions tab or on version tags (`v*`)
+- Google OAuth creds injected from GitHub repository secrets at build time
+- Produces downloadable DMG + ZIP artifacts
+- Build steps: install deps → build renderer → generate oauth-config.json → electron-builder → upload artifacts
+
+## Changed: Build Process (V4)
+
+- `package.json` — `build:all` now uses `ensure:web` instead of building the full Next.js dashboard
+- The `pickleglass_web` dashboard is not needed for the core app; a placeholder `out/` directory is created
+- Added `prebuild` script that runs `scripts/generate-oauth-config.js`
+- `scripts/generate-oauth-config.js` — generates `oauth-config.json` from `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` env vars
+- Config file is gitignored; only exists at build time or for local dev

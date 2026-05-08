@@ -120,6 +120,9 @@ Real-time talking points and suggestions based on the live conversation.
 - ✅ Move hardcoded API keys to secure config (removed `glass-dev-token` fallback, dynamic proxy token)
 - ✅ Strip Firebase API key from build artifacts
 - ✅ Onboarding flow (3-step wizard: API keys → permissions → Google OAuth)
+- ✅ Google OAuth creds loaded from config file (generated at build time, gitignored)
+- ✅ Disabled Cmd+Shift+Left/Right shortcuts (conflicted with system text selection)
+- ✅ GitHub Actions CI workflow for building macOS DMG
 
 **Remaining:**
 - Auto-stop call detection (see V2.5)

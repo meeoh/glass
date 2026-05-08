@@ -17,7 +17,8 @@
         "postinstall": "electron-builder install-app-deps",
         "build:renderer": "node build.js",
         "build:web": "cd pickleglass_web && npm run build && cd ..",
-        "build:all": "npm run build:renderer && npm run build:web",
+        "build:all": "npm run build:renderer && npm run ensure:web",
+        "ensure:web": "test -d pickleglass_web/out || mkdir -p pickleglass_web/out && echo '<html><body></body></html>' > pickleglass_web/out/index.html",
         "watch:renderer": "node build.js --watch"
     },
     "keywords": [

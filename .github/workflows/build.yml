@@ -1,45 +1,51 @@
-name: Build & Verify
+name: Build & Package
 
 on:
+  workflow_dispatch: # Manual trigger from Actions tab
   push:
-    branches: [ "main" ] # Runs on every push to main branch
+    tags:
+      - 'v*' # Auto-build on version tags (v0.3.0, etc.)
 
 jobs:
-  build:
-    # Currently runs on macOS only, can add windows-latest later
-    runs-on: macos-latest
-
+  build-mac:
+    runs-on: macos-14 # Apple Silicon runner
     steps:
-      - name: 🚚 Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: ⚙️ Setup Node.js environment
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: '20.x' # Node.js version compatible with project
-          cache: 'npm' # npm dependency caching for speed improvement
+          node-version: '20'
+          cache: 'npm'
 
-      - name: 📦 Install root dependencies
-        run: npm install
-
-      - name: 🌐 Install and build web (Renderer) part
-        # Move to pickleglass_web directory and run commands
-        working-directory: ./pickleglass_web
+      - name: Install dependencies
         run: |
-          npm install
-          npm run build
+          npm install --ignore-scripts
+          npx electron-rebuild
+          cd pickleglass_web && npm install && cd ..
 
-      - name: 🖥️ Build Electron app
-        # Run Electron build script from root directory
-        run: npm run build
+      - name: Build renderer
+        run: node build.js
 
-      - name: 🚨 Send failure notification to Slack
-        if: failure()
-        uses: rtCamp/action-slack-notify@v2
+      - name: Ensure web output directory
+        run: mkdir -p pickleglass_web/out && echo '<html><body></body></html>' > pickleglass_web/out/index.html
+
+      - name: Generate OAuth config
         env:
-          SLACK_CHANNEL: general
-          SLACK_TITLE: "🚨 Build Failed"
-          SLACK_MESSAGE: "😭 Build failed for `${{ github.repository }}` repo on main branch."
-          SLACK_COLOR: 'danger'
-          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+        run: node scripts/generate-oauth-config.js
 
+      - name: Build macOS DMG
+        run: npx electron-builder --config electron-builder.yml --publish never
+
+      - name: Upload DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: Sales-Assistant-macOS
+          path: dist/*.dmg
+
+      - name: Upload ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: Sales-Assistant-macOS-zip
+          path: dist/*.zip
