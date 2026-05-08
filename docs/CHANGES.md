@@ -325,6 +325,14 @@ Internal identifiers (`pickle-glass-app` custom element, `pickleGlassApp` IPC na
 - These conflicted with macOS system text selection shortcuts
 - Edge snapping via keyboard is no longer available (drag the window instead)
 
+## Note: SystemAudioDump Binary Bypassed (V3)
+
+The upstream Glass app shipped with a native binary (`src/ui/assets/SystemAudioDump`) for capturing system audio via CoreAudio. This binary is ad-hoc signed and gets killed by Shopify's MDM policy (Gatekeeper blocks unsigned/ad-hoc binaries).
+
+**Current workaround:** System audio capture uses Electron's `getDisplayMedia` with `audio: true` instead. This piggybacks on the Screen Recording permission — macOS captures system audio via the display media loopback. The binary still exists in the repo but nothing uses it.
+
+**Long-term fix:** Once the app is properly code-signed with a Shopify Apple Developer certificate, the `SystemAudioDump` binary (or a CoreAudio tap) could be re-enabled for cleaner, lower-latency audio capture.
+
 ## Changed: Deepgram API Key Baked In at Build Time (V4)
 
 - Deepgram API key is no longer per-user — it's a shared team key baked into the app at build time
