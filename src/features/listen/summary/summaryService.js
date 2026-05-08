@@ -43,18 +43,25 @@ class SummaryService {
         console.log(`💬 Added conversation text: ${conversationText}`);
         console.log(`📈 Total conversation history: ${this.conversationHistory.length} texts`);
 
-        // Check for high-signal moments that should trigger immediate coaching
+        // Only trigger coaching after the PROSPECT speaks — that's when the rep needs guidance
         if (speaker.toLowerCase() === 'them') {
+            // Check for high-signal moments that should trigger immediate coaching
             const urgentSignal = this._detectUrgentSignal(text);
             if (urgentSignal) {
                 console.log(`⚡ Urgent signal detected: ${urgentSignal.type} — triggering immediate coaching`);
                 this._triggerImmediateAnalysis(urgentSignal);
                 return;
             }
-        }
 
-        // Standard cadence — every 2 turns
-        this.triggerAnalysisIfNeeded();
+            // Standard cadence — trigger when prospect says something substantial (8+ words)
+            const wordCount = text.trim().split(/\s+/).length;
+            if (wordCount >= 8) {
+                this.triggerAnalysisIfNeeded();
+            } else {
+                console.log(`[Coaching] Prospect said ${wordCount} words — too short, waiting for more`);
+            }
+        }
+        // Rep speaking does NOT trigger coaching — they've already said it
     }
 
     getConversationHistory() {
@@ -450,21 +457,31 @@ Format:
     }
 
     async triggerAnalysisIfNeeded() {
-        if (this.conversationHistory.length >= 2 && this.conversationHistory.length % 2 === 0) {
-            console.log(`Triggering sales coaching analysis - ${this.conversationHistory.length} conversation texts accumulated`);
+        // Debounce — don't trigger if we just ran analysis within 5 seconds
+        if (this._lastAnalysisTrigger && Date.now() - this._lastAnalysisTrigger < 5000) {
+            console.log('[Coaching] Debounced — analysis ran recently');
+            return;
+        }
 
-            const data = await this.makeOutlineAndRequests(this.conversationHistory);
-            if (data) {
-                console.log('Sending structured data to renderer');
-                this.sendToRenderer('summary-update', data);
-                
-                // Notify callback
-                if (this.onAnalysisComplete) {
-                    this.onAnalysisComplete(data);
-                }
-            } else {
-                console.log('No analysis data returned');
+        // Need at least 2 turns (one from each side ideally) for meaningful coaching
+        if (this.conversationHistory.length < 2) {
+            return;
+        }
+
+        this._lastAnalysisTrigger = Date.now();
+        console.log(`🎯 Triggering sales coaching — prospect just spoke (${this.conversationHistory.length} turns total)`);
+
+        const data = await this.makeOutlineAndRequests(this.conversationHistory);
+        if (data) {
+            console.log('Sending structured data to renderer');
+            this.sendToRenderer('summary-update', data);
+            
+            // Notify callback
+            if (this.onAnalysisComplete) {
+                this.onAnalysisComplete(data);
             }
+        } else {
+            console.log('No analysis data returned');
         }
     }
 

@@ -325,6 +325,15 @@ Internal identifiers (`pickle-glass-app` custom element, `pickleGlassApp` IPC na
 - These conflicted with macOS system text selection shortcuts
 - Edge snapping via keyboard is no longer available (drag the window instead)
 
+## Changed: Coaching Triggers on Prospect Speech Only (V4)
+
+- `src/features/listen/summary/summaryService.js` — coaching now triggers only after the **prospect** speaks, not the rep
+- Requires 8+ words from the prospect to trigger (filters out "yeah", "okay", short affirmations)
+- Smart triggers (objection/buying signal keywords) still fire immediately regardless of word count
+- 5-second debounce prevents rapid-fire LLM calls from back-to-back prospect sentences
+- Rep's speech is still transcribed and included as context, but does NOT trigger coaching
+- Result: coaching arrives at exactly the right moment — after the prospect finishes, before the rep responds
+
 ## Disabled: Vault CRM Integration (V4 — Temporary)
 
 Vault CRM features (contact lookup, auto-match, post-call summary push) are disabled when `VAULT_API_TOKEN` is not set.
