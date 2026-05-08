@@ -248,3 +248,67 @@ Pattern-matched against ~60 phrases from prospect speech. Fires immediately inst
 - When MicWatcher detected a call before the header state transitioned to 'main', feature windows (listen, ask, settings) didn't exist yet
 - `showHUD()` now ensures feature windows are created before showing the HUD
 - Fixes the transcript/insights panel not appearing on auto-start race condition
+
+## Removed: Firebase API Key from Build Artifacts (V4)
+
+- Deleted `pickleglass_web/out/` directory containing baked-in Firebase API key
+- Source file (`pickleglass_web/utils/firebase.ts`) was already stripped — key only lived in static build output
+- Directory was already in `.gitignore`, only present as untracked local artifacts
+
+## Removed: Hardcoded `glass-dev-token` Fallback (V4)
+
+| What | Files Changed |
+|---|---|
+| `glass-dev-token` default removed | `src/features/vault/vaultService.js` |
+| Same | `src/features/contactMatch/contactMatchService.js` |
+| Same | `src/features/listen/summary/postCallSummaryService.js` |
+
+- All three files now fall back to empty string (`''`) instead of a hardcoded dev token
+- Requires `VAULT_API_TOKEN` to be set via `.env` or the environment
+- The token is still `glass-dev-token` for local dev — just no longer baked into source
+
+## Changed: Dynamic Proxy Token Reading (V4)
+
+- `src/features/common/ai/providers/openai.js` — replaced static `PROXY_API_TOKEN` constant with `getProxyToken()` function
+- Reads `process.env.SHOPIFY_PROXY_TOKEN` at call time instead of module load time
+- Allows keys saved during onboarding to take effect without app restart
+
+## Added: First-Launch Onboarding Wizard (V4)
+
+**New IPC handlers** in `src/bridge/featureBridge.js`:
+- `glass:check-setup-complete` — returns status of keys, permissions, Google auth
+- `glass:save-setup-keys` — saves Shopify proxy token + Deepgram key to SQLite, sets env vars
+- `glass:request-mic-permission` — triggers macOS microphone permission prompt
+
+**New preload methods** in `src/preload.js`:
+- `checkSetupComplete()`, `saveSetupKeys(keys)`, `requestMicPermission()`, `openSystemPreferences(section)`
+
+**3-step setup wizard** in `src/ui/main/main.html`:
+1. **API Keys** — paste Shopify Proxy Token + Deepgram API Key (with links to generation portals)
+2. **Permissions** — grant Microphone (button trigger) + Screen Recording (link to System Settings)
+3. **Connect Google** — OAuth for calendar-based contact detection + rep email identity
+
+Wizard only shows when no API keys are configured. Once keys are saved, shows the normal main app view. Keys stored in SQLite via `providerSettingsRepository` (same as existing `modelStateService` pattern).
+
+## Rebranded: "Glass" / "Pickle Glass" → "Sales Assistant" (V4)
+
+| File | Change |
+|---|---|
+| `package.json` | name: `sales-assistant`, productName: `Sales Assistant` |
+| `electron-builder.yml` | appId: `com.shopify.sales-assistant`, productName, protocols, publish config |
+| `notarize.js` | appBundleId updated |
+| `entitlements.plist` | mach-lookup name updated |
+| `src/window/windowManager.js` | Main window title |
+| `src/ui/main/main.html` | Title, titlebar, footer, hero text |
+| `src/ui/app/content.html` | HTML title |
+| `src/ui/app/header.html` | HTML title |
+| `src/ui/app/WelcomeHeader.js` | Welcome text, privacy notice |
+| `src/ui/app/PermissionHeader.js` | Continue button text |
+| `src/ui/app/ApiKeyHeader.js` | Privacy notice |
+| `src/ui/settings/SettingsView.js` | App title in settings |
+| `src/ui/listen/ListenView.js` | "Copy Glass Analysis" → "Copy Analysis", listening status |
+| `src/features/common/services/modelStateService.js` | electron-store name |
+| `src/features/settings/settingsService.js` | electron-store name |
+| `README.md` | Complete rewrite for Sales Assistant |
+
+Internal identifiers (`pickle-glass-app` custom element, `pickleGlassApp` IPC namespace, `window.pickleGlass`) left unchanged to avoid breaking the component/IPC contract.

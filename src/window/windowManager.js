@@ -857,7 +857,7 @@ function createMainAppWindow() {
             preload: path.join(__dirname, '../preload.js'),
             backgroundThrottling: false,
         },
-        title: 'Glass',
+        title: 'Sales Assistant',
     });
 
     mainWin.loadFile(path.join(__dirname, '../ui/main/main.html'));

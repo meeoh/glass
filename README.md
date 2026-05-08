@@ -1,134 +1,69 @@
-<p align="center">
-  <a href="https://pickle.com/glass">
-   <img src="./public/assets/banner.gif" alt="Logo">
-  </a>
+# Sales Assistant
 
-  <h1 align="center">Glass by Pickle: Digital Mind Extension 🧠</h1>
+An internal Shopify desktop app for sales reps. Listens to both sides of a live call, transcribes in real-time, and provides AI-powered coaching and CRM-informed recommendations.
 
-</p>
+Built on [Pickle Glass](https://github.com/meeoh/glass), rewired to use Shopify infrastructure.
 
-
-<p align="center">
-  <a href="https://discord.gg/UCZH5B5Hpd"><img src="./public/assets/button_dc.png" width="80" alt="Pickle Discord"></a>&ensp;<a href="https://pickle.com"><img src="./public/assets/button_we.png" width="105" alt="Pickle Website"></a>&ensp;<a href="https://x.com/intent/user?screen_name=leinadpark"><img src="./public/assets/button_xe.png" width="109" alt="Follow Daniel"></a>
-</p>
-
-> This project is a fork of [CheatingDaddy](https://github.com/sohzm/cheating-daddy) with modifications and enhancements. Thanks to [Soham](https://x.com/soham_btw) and all the open-source contributors who made this possible!
-
-🤖 **Fast, light & open-source**—Glass lives on your desktop, sees what you see, listens in real time, understands your context, and turns every moment into structured knowledge.
-
-💬 **Proactive in meetings**—it surfaces action items, summaries, and answers the instant you need them.
-
-🫥️ **Truly invisible**—never shows up in screen recordings, screenshots, or your dock; no always-on capture or hidden sharing.
-
-To have fun building with us, join our [Discord](https://discord.gg/UCZH5B5Hpd)!
-
-## Instant Launch
-
-⚡️  Skip the setup—launch instantly with our ready-to-run macOS app.  [[Download Here]](https://www.dropbox.com/scl/fi/znid09apxiwtwvxer6oc9/Glass_latest.dmg?rlkey=gwvvyb3bizkl25frhs4k1zwds&st=37q31b4w&dl=1)
-
-## Quick Start (Local Build)
-
-### Prerequisites
-
-First download & install [Python](https://www.python.org/downloads/) and [Node](https://nodejs.org/en/download).
-If you are using Windows, you need to also install [Build Tools for Visual Studio](https://visualstudio.microsoft.com/downloads/)
-
-Ensure you're using Node.js version 20.x.x to avoid build errors with native dependencies.
+## Quick Start
 
 ```bash
-# Check your Node.js version
-node --version
+# Requires Node 20.x
+export PATH="/opt/homebrew/opt/node@20/bin:$PATH"
 
-# If you need to install Node.js 20.x.x, we recommend using nvm:
-# curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
-# nvm install 20
-# nvm use 20
+# First time — install deps + build
+npm install --ignore-scripts
+npx electron-rebuild
+cd pickleglass_web && npm install && npm run build && cd ..
+node build.js
+
+# Run
+npx electron .
 ```
 
-### Installation
+On first launch, the app will walk you through setup:
+1. **Shopify AI Proxy Token** — generate at [proxy.shopify.ai](https://proxy.shopify.ai)
+2. **Deepgram API Key** — get from [console.deepgram.com](https://console.deepgram.com) (free $200 credit)
+3. **Permissions** — grant Microphone + Screen Recording
+4. **Google Account** — connect for calendar-based contact matching
 
-```bash
-npm run setup
-```
+## Features
 
-## Highlights
+| Feature | Status |
+|---|---|
+| Live transcript (both sides) | ✅ |
+| AI sales coaching (real-time) | ✅ |
+| Vault CRM integration | ✅ |
+| Auto-start on call detection | ✅ |
+| Auto-detect contact (Calendar + Vault) | ✅ |
+| Post-call AI summary → CRM | ✅ |
+| Smart coaching triggers | ✅ |
+| Sales knowledge base (16 files) | ✅ |
 
+## How It Works
 
-### Ask: get answers based on all your previous screen actions & audio
-
-<img width="100%" alt="booking-screen" src="./public/assets/00.gif">
-
-### Meetings: real-time meeting notes, live summaries, session records
-
-<img width="100%" alt="booking-screen" src="./public/assets/01.gif">
-
-### Use your own API key, or sign up to use ours (free)
-
-<img width="100%" alt="booking-screen" src="./public/assets/02.gif">
-
-**Currently Supporting:**
-- OpenAI API: Get OpenAI API Key [here](https://platform.openai.com/api-keys)
-- Gemini API: Get Gemini API Key [here](https://aistudio.google.com/apikey)
-- Local LLM Ollama & Whisper
-
-### Liquid Glass Design (coming soon)
-
-<img width="100%" alt="booking-screen" src="./public/assets/03.gif">
-
-<p>
-  for a more detailed guide, please refer to this <a href="https://www.youtube.com/watch?v=qHg3_4bU1Dw">video.</a>
-  <i style="color:gray; font-weight:300;">
-    we don't waste money on fancy vids; we just code.
-  </i>
-</p>
-
+1. **MicWatcher** detects when you join a call (any app grabs your mic)
+2. Captures your mic + system audio → **Deepgram STT** (real-time)
+3. Every 2 turns, **GPT-4.1** generates coaching: "Say This", "Ask This"
+4. CRM contact auto-matched via Vault API or Google Calendar attendees
+5. On "Done", generates AI summary and pushes to Vault CRM
 
 ## Keyboard Shortcuts
 
-`Ctrl/Cmd + \` : show and hide main window
+- `Cmd + \` — show/hide the HUD
 
-`Ctrl/Cmd + Enter` : ask AI using all your previous screen and audio
+## Environment Variables (Optional)
 
-`Ctrl/Cmd + Arrows` : move main window position
+If you prefer `.env` over the in-app setup wizard:
 
-## Repo Activity
+| Variable | Description |
+|---|---|
+| `SHOPIFY_PROXY_TOKEN` | Shopify AI proxy token |
+| `DEEPGRAM_API_KEY` | Deepgram API key |
+| `GOOGLE_CLIENT_ID` | Google OAuth2 client ID |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth2 client secret |
+| `VAULT_URL` | Vault base URL (default: `https://u2.shop.dev`) |
+| `VAULT_API_TOKEN` | Vault API token |
 
-![Alt](https://repobeats.axiom.co/api/embed/a23e342faafa84fa8797fa57762885d82fac1180.svg "Repobeats analytics image")
+## Docs
 
-## Contributing
-
-We love contributions! Feel free to open issues for bugs or feature requests. For detailed guide, please see our [contributing guide](/CONTRIBUTING.md).
-> Currently, we're working on a full code refactor and modularization. Once that's completed, we'll jump into addressing the major issues.
-
-### Contributors
-
-<a href="https://github.com/pickle-com/glass/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=pickle-com/glass" />
-</a>
-
-### Help Wanted Issues
-
-We have a list of [help wanted](https://github.com/pickle-com/glass/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22%F0%9F%99%8B%E2%80%8D%E2%99%82%EF%B8%8Fhelp%20wanted%22) that contain small features and bugs which have a relatively limited scope. This is a great place to get started, gain experience, and get familiar with our contribution process.
-
-
-### 🛠 Current Issues & Improvements
-
-| Status | Issue                          | Description                                       |
-|--------|--------------------------------|---------------------------------------------------|
-| 🚧 WIP      | Liquid Glass                    | Liquid Glass UI for MacOS 26 |
-
-### Changelog
-
-- Jul 5: Now support Gemini, Intel Mac supported
-- Jul 6: Full code refactoring has done.
-- Jul 7: Now support Claude, LLM/STT model selection
-- Jul 8: Now support Windows(beta), Improved AEC by Rust(to seperate mic/system audio), shortcut editing(beta)
-- Jul 8: Now support Local LLM & STT, Firebase Data Storage 
-
-
-## About Pickle
-
-**Our mission is to build a living digital clone for everyone.** Glass is part of Step 1—a trusted pipeline that transforms your daily data into a scalable clone. Visit [pickle.com](https://pickle.com) to learn more.
-
-## Star History
-[![Star History Chart](https://api.star-history.com/svg?repos=pickle-com/glass&type=Date)](https://www.star-history.com/#pickle-com/glass&Date)
+See [docs/](./docs/) for architecture, decisions, troubleshooting, and API details.

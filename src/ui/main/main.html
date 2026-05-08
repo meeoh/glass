@@ -3,7 +3,7 @@
     <head>
         <meta http-equiv="content-security-policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval'" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>Glass</title>
+        <title>Sales Assistant</title>
         <style>
             :root {
                 --bg-primary: #0d0d0f;
@@ -366,13 +366,13 @@
     <body>
         <div class="app-container">
             <div class="titlebar">
-                <span class="titlebar-text">Glass</span>
+                <span class="titlebar-text">Sales Assistant</span>
             </div>
             <div class="content" id="content">
                 <!-- Populated by script -->
             </div>
             <div class="footer">
-                <span class="footer-text">Glass — Sales Call Assistant</span>
+                <span class="footer-text">Sales Assistant</span>
             </div>
         </div>
 
@@ -381,6 +381,7 @@
 
             // State
             let state = {
+                setupComplete: false,
                 isAuthorized: false,
                 userProfile: null,
                 events: [],
@@ -388,10 +389,164 @@
                 matchResult: null,
             };
 
+            // Onboarding state
+            let setupStep = 1; // 1: API keys, 2: Permissions, 3: Google
+            let setupStatus = { hasProxyToken: false, hasDeepgramKey: false, hasMicPermission: false, hasScreenPermission: false, isGoogleAuthorized: false };
+            let setupError = '';
+
+            // ─── MAIN RENDER ───
+
             function render() {
+                if (!state.setupComplete) {
+                    renderOnboarding();
+                    return;
+                }
+                renderMainApp();
+            }
+
+            // ─── ONBOARDING WIZARD ───
+
+            function renderOnboarding() {
+                let html = `
+                    <div class="hero" style="padding:30px 20px 20px">
+                        <div class="hero-icon">🚀</div>
+                        <h1>Welcome to Sales Assistant</h1>
+                        <p>Let's get you set up in 3 quick steps.</p>
+                    </div>
+                    <div style="display:flex;gap:4px;margin:0 0 24px;padding:0 20px">
+                        <div style="flex:1;height:3px;border-radius:2px;background:${setupStep >= 1 ? 'var(--accent)' : 'var(--bg-tertiary)'}"></div>
+                        <div style="flex:1;height:3px;border-radius:2px;background:${setupStep >= 2 ? 'var(--accent)' : 'var(--bg-tertiary)'}"></div>
+                        <div style="flex:1;height:3px;border-radius:2px;background:${setupStep >= 3 ? 'var(--accent)' : 'var(--bg-tertiary)'}"></div>
+                    </div>`;
+
+                if (setupStep === 1) {
+                    html += renderStep1();
+                } else if (setupStep === 2) {
+                    html += renderStep2();
+                } else if (setupStep === 3) {
+                    html += renderStep3();
+                }
+
+                content.innerHTML = html;
+            }
+
+            function renderStep1() {
+                return `
+                    <div class="section" style="padding:0 4px">
+                        <div class="section-header">
+                            <span class="section-title">Step 1 — API Keys</span>
+                        </div>
+
+                        <div style="margin-bottom:16px">
+                            <label style="font-size:12px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:6px">
+                                Shopify AI Proxy Token
+                            </label>
+                            <input id="input-proxy" type="password" placeholder="shopify-eyJ..." value="${setupStatus.hasProxyToken ? '••••••••••••' : ''}"
+                                style="width:100%;padding:10px 12px;background:var(--bg-secondary);border:1px solid var(--border-light);border-radius:var(--radius-sm);color:var(--text-primary);font-size:13px;outline:none;font-family:monospace"
+                                onfocus="if(this.value==='••••••••••••')this.value=''"
+                            />
+                            <div style="font-size:11px;color:var(--text-tertiary);margin-top:4px">
+                                Generate at <span style="color:var(--accent)">proxy.shopify.ai</span> → Personal Token
+                            </div>
+                        </div>
+
+                        <div style="margin-bottom:16px">
+                            <label style="font-size:12px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:6px">
+                                Deepgram API Key
+                            </label>
+                            <input id="input-deepgram" type="password" placeholder="df58aa..." value="${setupStatus.hasDeepgramKey ? '••••••••••••' : ''}"
+                                style="width:100%;padding:10px 12px;background:var(--bg-secondary);border:1px solid var(--border-light);border-radius:var(--radius-sm);color:var(--text-primary);font-size:13px;outline:none;font-family:monospace"
+                                onfocus="if(this.value==='••••••••••••')this.value=''"
+                            />
+                            <div style="font-size:11px;color:var(--text-tertiary);margin-top:4px">
+                                Get from <span style="color:var(--accent)">console.deepgram.com</span> → API Keys ($200 free credit)
+                            </div>
+                        </div>
+
+                        ${setupError ? `<div style="font-size:12px;color:var(--red);margin-bottom:12px">${setupError}</div>` : ''}
+
+                        <button class="btn btn-primary" onclick="saveKeys()" style="width:100%;justify-content:center;padding:12px">
+                            Continue →
+                        </button>
+                    </div>`;
+            }
+
+            function renderStep2() {
+                const micIcon = setupStatus.hasMicPermission ? '✅' : '⚠️';
+                const screenIcon = setupStatus.hasScreenPermission ? '✅' : '⚠️';
+
+                return `
+                    <div class="section" style="padding:0 4px">
+                        <div class="section-header">
+                            <span class="section-title">Step 2 — Permissions</span>
+                        </div>
+
+                        <div class="auth-card" style="margin-bottom:12px">
+                            <div class="auth-avatar">${micIcon}</div>
+                            <div class="auth-info">
+                                <div class="auth-name">Microphone</div>
+                                <div class="auth-email">${setupStatus.hasMicPermission ? 'Granted' : 'Needed to capture your voice'}</div>
+                            </div>
+                            ${!setupStatus.hasMicPermission ? `<button class="btn btn-primary btn-sm" onclick="requestMic()">Grant</button>` : ''}
+                        </div>
+
+                        <div class="auth-card" style="margin-bottom:12px">
+                            <div class="auth-avatar">${screenIcon}</div>
+                            <div class="auth-info">
+                                <div class="auth-name">Screen Recording</div>
+                                <div class="auth-email">${setupStatus.hasScreenPermission ? 'Granted' : 'Needed to hear the other person'}</div>
+                            </div>
+                            ${!setupStatus.hasScreenPermission ? `<button class="btn btn-ghost btn-sm" onclick="openScreenPrefs()">Open Settings</button>` : ''}
+                        </div>
+
+                        ${!setupStatus.hasScreenPermission ? `
+                            <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:16px;line-height:1.4">
+                                Open System Settings → Privacy & Security → Screen Recording → enable Sales Assistant. You may need to restart the app.
+                            </div>` : ''}
+
+                        <button class="btn btn-primary" onclick="nextStep(3)" style="width:100%;justify-content:center;padding:12px">
+                            ${setupStatus.hasMicPermission ? 'Continue →' : 'Skip for now →'}
+                        </button>
+                    </div>`;
+            }
+
+            function renderStep3() {
+                return `
+                    <div class="section" style="padding:0 4px">
+                        <div class="section-header">
+                            <span class="section-title">Step 3 — Connect Google</span>
+                        </div>
+
+                        <div style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;line-height:1.5">
+                            Connect your Google account to enable calendar-based contact detection. Your email is also used to identify you in the CRM.
+                        </div>
+
+                        ${setupStatus.isGoogleAuthorized ? `
+                            <div class="auth-card" style="margin-bottom:16px">
+                                <div class="auth-avatar">✅</div>
+                                <div class="auth-info">
+                                    <div class="auth-name">Google Connected</div>
+                                    <div class="auth-email">${state.userProfile?.email || ''}</div>
+                                </div>
+                            </div>` : `
+                            <button class="btn btn-primary" onclick="authorize()" style="width:100%;justify-content:center;padding:12px;margin-bottom:12px">
+                                Connect Google Account
+                            </button>
+                            <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:16px">
+                                Opens your browser for secure OAuth sign-in.
+                            </div>`}
+
+                        <button class="btn ${setupStatus.isGoogleAuthorized ? 'btn-primary' : 'btn-ghost'}" onclick="finishSetup()" style="width:100%;justify-content:center;padding:12px">
+                            ${setupStatus.isGoogleAuthorized ? 'Done — Start Using Sales Assistant' : 'Skip — I\'ll connect later'}
+                        </button>
+                    </div>`;
+            }
+
+            // ─── MAIN APP VIEW ───
+
+            function renderMainApp() {
                 let html = '';
 
-                // Status bar
                 if (state.isListening) {
                     html += `
                         <div class="call-active-banner">
@@ -414,17 +569,15 @@
                             </div>`;
                     }
                 } else {
-                    // Hero — idle state
                     html += `
                         <div class="hero">
                             <div class="hero-icon">🎧</div>
                             <h1>Ready to coach</h1>
-                            <p>Start a call on Zoom, Google Meet, or the CRM dialer — Glass will automatically begin listening, transcribing, and giving you real-time advice.</p>
+                            <p>Start a call on Zoom, Google Meet, or the CRM dialer — Sales Assistant will automatically begin listening, transcribing, and giving you real-time advice.</p>
                         </div>
                         <div class="divider"></div>`;
                 }
 
-                // Show HUD button — always visible
                 html += `
                     <button class="btn btn-ghost" onclick="showHUD()" style="width:100%;justify-content:center;margin-bottom:20px">
                         Show HUD
@@ -462,7 +615,7 @@
                 }
                 html += `</div>`;
 
-                // Events section — only show if authorized
+                // Events section
                 if (state.isAuthorized) {
                     html += `<div class="section">`;
                     html += `<div class="section-header">
@@ -527,7 +680,65 @@
                 return div.innerHTML;
             }
 
-            // ─── IPC Actions ───
+            // ─── Onboarding Actions ───
+
+            async function saveKeys() {
+                const proxyInput = document.getElementById('input-proxy');
+                const deepgramInput = document.getElementById('input-deepgram');
+                const proxyToken = proxyInput.value.trim();
+                const deepgramKey = deepgramInput.value.trim();
+
+                // Skip placeholder values
+                const actualProxy = proxyToken === '••••••••••••' ? null : proxyToken;
+                const actualDeepgram = deepgramKey === '••••••••••••' ? null : deepgramKey;
+
+                if (!actualProxy && !setupStatus.hasProxyToken) {
+                    setupError = 'Shopify Proxy Token is required.';
+                    render();
+                    return;
+                }
+                if (!actualDeepgram && !setupStatus.hasDeepgramKey) {
+                    setupError = 'Deepgram API Key is required.';
+                    render();
+                    return;
+                }
+
+                setupError = '';
+                try {
+                    await window.api.glass.saveSetupKeys({
+                        proxyToken: actualProxy,
+                        deepgramKey: actualDeepgram,
+                    });
+                    setupStatus.hasProxyToken = true;
+                    setupStatus.hasDeepgramKey = true;
+                    nextStep(2);
+                } catch (err) {
+                    setupError = 'Failed to save keys: ' + err.message;
+                    render();
+                }
+            }
+
+            async function requestMic() {
+                const result = await window.api.glass.requestMicPermission();
+                setupStatus.hasMicPermission = result.granted;
+                render();
+            }
+
+            function openScreenPrefs() {
+                window.api.glass.openSystemPreferences && window.api.glass.openSystemPreferences('screen');
+            }
+
+            function nextStep(step) {
+                setupStep = step;
+                render();
+            }
+
+            async function finishSetup() {
+                state.setupComplete = true;
+                render();
+            }
+
+            // ─── Main App Actions ───
 
             async function authorize() {
                 try {
@@ -555,6 +766,8 @@
                 window.api.glass.onAuthChanged((_, profile) => {
                     state.isAuthorized = profile.isAuthorized;
                     state.userProfile = profile;
+                    // Update setup status too (for onboarding step 3)
+                    setupStatus.isGoogleAuthorized = profile.isAuthorized;
                     render();
                 });
 
@@ -573,9 +786,17 @@
                     render();
                 });
 
-                // Load initial state
+                // Load initial state + check if setup is needed
                 window.api.glass.getInitialState().then(s => {
                     state = { ...state, ...s };
+                    // Also load setup status
+                    return window.api.glass.checkSetupComplete();
+                }).then(status => {
+                    setupStatus = status;
+                    // If both keys are present, setup is complete
+                    if (setupStatus.hasProxyToken && setupStatus.hasDeepgramKey) {
+                        state.setupComplete = true;
+                    }
                     render();
                 });
             } else {

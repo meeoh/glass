@@ -1,5 +1,5 @@
 // src/bridge/featureBridge.js
-const { ipcMain, app, BrowserWindow } = require('electron');
+const { ipcMain, app, BrowserWindow, systemPreferences } = require('electron');
 const settingsService = require('../features/settings/settingsService');
 const authService = require('../features/common/services/authService');
 const whisperService = require('../features/common/services/whisperService');
@@ -16,6 +16,7 @@ const googleAuthService = require('../features/googleAuth/googleAuthService');
 const calendarService = require('../features/calendar/calendarService');
 const contactMatchService = require('../features/contactMatch/contactMatchService');
 const postCallSummaryService = require('../features/listen/summary/postCallSummaryService');
+const providerSettingsRepository = require('../features/common/repositories/providerSettings');
 
 module.exports = {
   // Renderer로부터의 요청을 수신하고 서비스로 전달
@@ -378,9 +379,57 @@ module.exports = {
       return { success: true };
     });
 
+    // ─── Onboarding / Setup ───
+    ipcMain.handle('glass:check-setup-complete', async () => {
+      const openai = await providerSettingsRepository.getByProvider('openai');
+      const deepgram = await providerSettingsRepository.getByProvider('deepgram');
+      return {
+        hasProxyToken: !!(openai && openai.api_key),
+        hasDeepgramKey: !!(deepgram && deepgram.api_key),
+        hasMicPermission: systemPreferences.getMediaAccessStatus('microphone') === 'granted',
+        hasScreenPermission: systemPreferences.getMediaAccessStatus('screen') === 'granted',
+        isGoogleAuthorized: googleAuthService.isAuthorized(),
+      };
+    });
+
+    ipcMain.handle('glass:save-setup-keys', async (_, { proxyToken, deepgramKey }) => {
+      if (proxyToken) {
+        await providerSettingsRepository.upsert('openai', {
+          api_key: proxyToken,
+          selected_llm_model: 'gpt-4.1',
+        });
+        await providerSettingsRepository.setActiveProvider('openai', 'llm');
+        // Also set the env var so services pick it up immediately
+        process.env.SHOPIFY_PROXY_TOKEN = proxyToken;
+      }
+      if (deepgramKey) {
+        await providerSettingsRepository.upsert('deepgram', {
+          api_key: deepgramKey,
+          selected_stt_model: 'nova-3',
+        });
+        await providerSettingsRepository.setActiveProvider('deepgram', 'stt');
+        process.env.DEEPGRAM_API_KEY = deepgramKey;
+      }
+      return { success: true };
+    });
+
+    ipcMain.handle('glass:request-mic-permission', async () => {
+      const status = systemPreferences.getMediaAccessStatus('microphone');
+      if (status === 'granted') return { granted: true };
+      if (status === 'not-determined') {
+        const granted = await systemPreferences.askForMediaAccess('microphone');
+        return { granted };
+      }
+      return { granted: false, status };
+    });
+
     // Initial state for main window
     ipcMain.handle('glass:get-initial-state', async () => {
+      const openai = await providerSettingsRepository.getByProvider('openai');
+      const deepgram = await providerSettingsRepository.getByProvider('deepgram');
+      const setupComplete = !!(openai && openai.api_key && deepgram && deepgram.api_key);
       return {
+        setupComplete,
         isAuthorized: googleAuthService.isAuthorized(),
         userProfile: googleAuthService.getUserProfile(),
         events: calendarService.getTodayEvents(),

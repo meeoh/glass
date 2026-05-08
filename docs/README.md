@@ -1,4 +1,4 @@
-# Glass — Sales Call Assistant
+# Sales Assistant
 
 An internal Electron desktop app for Shopify sales reps. It listens to both sides of a live call, transcribes in real-time, and provides AI-powered talking points and CRM-informed recommendations to help close deals.
 
@@ -89,7 +89,7 @@ On launch, Glass shows a main application window with:
 The HUD overlay (header + transcript + insights) stays hidden until a call is detected.
 
 ### Auto Call Detection
-Glass automatically detects when you join a call. A native Swift binary (`MicWatcher`) monitors the **macOS system default input device** — when any app (Zoom, Google Meet, Teams, etc.) starts using the mic, Glass auto-starts listening and coaching. No button press needed.
+Glass automatically detects when you join a call. A native Swift binary (`MicWatcher`) monitors the **macOS system default input device** — when any app (Zoom, Google Meet, Teams, etc.) starts using the mic, Sales Assistant auto-starts listening and coaching. No button press needed.
 
 **Important:** MicWatcher tracks the macOS system default input device. If your call app uses a different mic (e.g., selected in Google Meet settings), MicWatcher won't detect it. The mic must be set as the system default in **System Settings → Sound → Input**.
 

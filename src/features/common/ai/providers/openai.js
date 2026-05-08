@@ -5,7 +5,8 @@ const { Readable } = require('stream');
 // Shopify AI Proxy configuration
 const PROXY_BASE_URL = 'https://proxy-shopify-ai.local.shop.dev';
 const PROXY_WS_URL = 'wss://proxy-shopify-ai.local.shop.dev';
-const PROXY_API_TOKEN = process.env.SHOPIFY_PROXY_TOKEN || '';
+// Read dynamically so keys saved during onboarding are picked up immediately
+function getProxyToken() { return process.env.SHOPIFY_PROXY_TOKEN || ''; }
 
 
 class OpenAIProvider {
@@ -23,7 +24,7 @@ async function createSTT({ apiKey, language = 'en', callbacks = {}, ...config })
   const wsUrl = `${PROXY_WS_URL}/v1/realtime?intent=transcription`;
 
   const headers = {
-    'Authorization': `Bearer ${PROXY_API_TOKEN}`,
+    'Authorization': `Bearer ${getProxyToken()}`,
     'OpenAI-Beta': 'realtime=v1',
   };
 
@@ -122,7 +123,7 @@ async function createSTT({ apiKey, language = 'en', callbacks = {}, ...config })
  */
 function createLLM({ apiKey, model = 'gpt-4.1', temperature = 0.7, maxTokens = 2048, ...config }) {
   const client = new OpenAI({
-    apiKey: PROXY_API_TOKEN,
+    apiKey: getProxyToken(),
     baseURL: `${PROXY_BASE_URL}/v1`,
   });
   
@@ -188,7 +189,7 @@ function createStreamingLLM({ apiKey, model = 'gpt-4.1', temperature = 0.7, maxT
       const fetchUrl = `${PROXY_BASE_URL}/v1/chat/completions`;
       
       const headers = {
-        Authorization: `Bearer ${PROXY_API_TOKEN}`,
+        Authorization: `Bearer ${getProxyToken()}`,
         'Content-Type': 'application/json',
       };
 

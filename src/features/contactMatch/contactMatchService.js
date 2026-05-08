@@ -13,7 +13,7 @@ const googleAuthService = require('../googleAuth/googleAuthService');
 const fetch = require('node-fetch');
 
 const VAULT_BASE_URL = process.env.VAULT_URL || 'https://u2.shop.dev';
-const VAULT_API_TOKEN = process.env.VAULT_API_TOKEN || 'glass-dev-token';
+const VAULT_API_TOKEN = process.env.VAULT_API_TOKEN || '';
 
 class ContactMatchService extends EventEmitter {
     constructor() {

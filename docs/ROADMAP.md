@@ -113,18 +113,22 @@ Real-time talking points and suggestions based on the live conversation.
 **Bug fix:**
 - Feature windows (listen, ask, settings) now created on showHUD if MicWatcher fires before header state transitions to 'main'
 
-## V4 — Distribution & Polish (Next)
+## V4 — Distribution & Polish (In Progress)
 
-**What to build:**
+**Done:**
+- ✅ Rebrand: "Glass" / "Pickle Glass" → "Sales Assistant" (app name, titles, builder config)
+- ✅ Move hardcoded API keys to secure config (removed `glass-dev-token` fallback, dynamic proxy token)
+- ✅ Strip Firebase API key from build artifacts
+- ✅ Onboarding flow (3-step wizard: API keys → permissions → Google OAuth)
+
+**Remaining:**
 - Auto-stop call detection (see V2.5)
 - Past sessions / history view in main app window
 - Remove DevTools from dev mode (or gate behind env var)
-- Rebrand: app name, icons, about screen
+- New app icon for Sales Assistant
 - Code-sign with Shopify certificate (fixes SystemAudioDump on managed Macs)
 - Package as DMG for internal distribution
-- Onboarding flow (permissions walkthrough)
 - Auto-updater pointing to internal release server
-- Move hardcoded API keys to secure config
 - Get Google Cloud project approved by Shopify Workspace admin (for @shopify.com accounts)
 
 ## Future Ideas

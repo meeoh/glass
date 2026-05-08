@@ -345,5 +345,11 @@ contextBridge.exposeInMainWorld('api', {
 
     // Initial state load (for main window)
     getInitialState: () => ipcRenderer.invoke('glass:get-initial-state'),
+
+    // Onboarding / Setup
+    checkSetupComplete: () => ipcRenderer.invoke('glass:check-setup-complete'),
+    saveSetupKeys: (keys) => ipcRenderer.invoke('glass:save-setup-keys', keys),
+    requestMicPermission: () => ipcRenderer.invoke('glass:request-mic-permission'),
+    openSystemPreferences: (section) => ipcRenderer.invoke('open-system-preferences', section),
   }
 });

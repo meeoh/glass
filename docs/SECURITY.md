@@ -41,7 +41,7 @@ All sensitive credentials are passed via environment variables (`.env` file, git
 | `GOOGLE_CLIENT_SECRET` | Google OAuth2 client secret |
 | `GLASS_REP_EMAIL` | Rep's Shopify email for Vault active call lookup |
 
-The only hardcoded credential is `glass-dev-token` in `vaultService.js` and `contactMatchService.js` — a static dev token for the Vault API, overridable via `VAULT_API_TOKEN` env var.
+No hardcoded credentials remain in source. All secrets are provided via environment variables or the in-app onboarding wizard (stored encrypted in SQLite).
 
 **Google OAuth tokens** are stored in SQLite (`google_auth` table) — access token, refresh token, user profile. Cleared on sign out.
 
