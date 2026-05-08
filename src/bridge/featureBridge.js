@@ -423,6 +423,24 @@ module.exports = {
       return { granted: false, status };
     });
 
+    ipcMain.handle('glass:request-screen-permission', async () => {
+      const { desktopCapturer, shell } = require('electron');
+      // Trigger a screen capture request to register the app in System Settings
+      try {
+        await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1, height: 1 } });
+      } catch (e) { /* expected on first request */ }
+      // Open System Settings to the Screen Recording pane
+      await shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
+      return { opened: true };
+    });
+
+    ipcMain.handle('glass:recheck-permissions', async () => {
+      return {
+        hasMicPermission: systemPreferences.getMediaAccessStatus('microphone') === 'granted',
+        hasScreenPermission: systemPreferences.getMediaAccessStatus('screen') === 'granted',
+      };
+    });
+
     // Initial state for main window
     ipcMain.handle('glass:get-initial-state', async () => {
       const openai = await providerSettingsRepository.getByProvider('openai');

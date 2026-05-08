@@ -423,6 +423,10 @@
                     html += renderStep1();
                 } else if (setupStep === 2) {
                     html += renderStep2();
+                    // Start polling for permission changes while user is in System Settings
+                    if (!setupStatus.hasMicPermission || !setupStatus.hasScreenPermission) {
+                        startPermissionPolling();
+                    }
                 } else if (setupStep === 3) {
                     html += renderStep3();
                 }
@@ -485,7 +489,7 @@
                                 <div class="auth-name">Screen Recording</div>
                                 <div class="auth-email">${setupStatus.hasScreenPermission ? 'Granted' : 'Needed to hear the other person'}</div>
                             </div>
-                            ${!setupStatus.hasScreenPermission ? `<button class="btn btn-ghost btn-sm" onclick="openScreenPrefs()">Open Settings</button>` : ''}
+                            ${!setupStatus.hasScreenPermission ? `<button class="btn btn-ghost btn-sm" onclick="requestScreen()">Open Settings</button>` : ''}
                         </div>
 
                         ${!setupStatus.hasScreenPermission ? `
@@ -494,7 +498,7 @@
                             </div>` : ''}
 
                         <button class="btn btn-primary" onclick="nextStep(3)" style="width:100%;justify-content:center;padding:12px">
-                            ${setupStatus.hasMicPermission ? 'Continue →' : 'Skip for now →'}
+                            ${setupStatus.hasMicPermission && setupStatus.hasScreenPermission ? 'Continue →' : 'Skip for now →'}
                         </button>
                     </div>`;
             }
@@ -703,8 +707,33 @@
                 render();
             }
 
-            function openScreenPrefs() {
-                window.api.glass.openSystemPreferences && window.api.glass.openSystemPreferences('screen');
+            async function requestScreen() {
+                await window.api.glass.requestScreenPermission();
+                // Poll for permission grant (user has to toggle it in System Settings)
+                startPermissionPolling();
+            }
+
+            let permissionPollTimer = null;
+            function startPermissionPolling() {
+                if (permissionPollTimer) return;
+                permissionPollTimer = setInterval(async () => {
+                    const perms = await window.api.glass.recheckPermissions();
+                    let changed = false;
+                    if (perms.hasMicPermission !== setupStatus.hasMicPermission) {
+                        setupStatus.hasMicPermission = perms.hasMicPermission;
+                        changed = true;
+                    }
+                    if (perms.hasScreenPermission !== setupStatus.hasScreenPermission) {
+                        setupStatus.hasScreenPermission = perms.hasScreenPermission;
+                        changed = true;
+                    }
+                    if (changed) render();
+                    // Stop polling once both are granted
+                    if (perms.hasMicPermission && perms.hasScreenPermission) {
+                        clearInterval(permissionPollTimer);
+                        permissionPollTimer = null;
+                    }
+                }, 2000);
             }
 
             function nextStep(step) {

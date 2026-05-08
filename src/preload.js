@@ -350,6 +350,8 @@ contextBridge.exposeInMainWorld('api', {
     checkSetupComplete: () => ipcRenderer.invoke('glass:check-setup-complete'),
     saveSetupKeys: (keys) => ipcRenderer.invoke('glass:save-setup-keys', keys),
     requestMicPermission: () => ipcRenderer.invoke('glass:request-mic-permission'),
+    requestScreenPermission: () => ipcRenderer.invoke('glass:request-screen-permission'),
+    recheckPermissions: () => ipcRenderer.invoke('glass:recheck-permissions'),
     openSystemPreferences: (section) => ipcRenderer.invoke('open-system-preferences', section),
   }
 });
