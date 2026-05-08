@@ -35,6 +35,10 @@ class PostCallSummaryService {
      * @returns {object} { success, summary, crmResult }
      */
     async generateAndPush(conversationHistory, options = {}) {
+        if (!VAULT_API_TOKEN) {
+            console.log('[PostCallSummary] Vault API token not configured, skipping summary push.');
+            return { success: false, error: 'Vault not configured' };
+        }
         if (this._generating) {
             console.log('[PostCallSummary] Already generating, skipping');
             return { success: false, error: 'Already generating' };

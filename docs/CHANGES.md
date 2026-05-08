@@ -325,6 +325,29 @@ Internal identifiers (`pickle-glass-app` custom element, `pickleGlassApp` IPC na
 - These conflicted with macOS system text selection shortcuts
 - Edge snapping via keyboard is no longer available (drag the window instead)
 
+## Disabled: Vault CRM Integration (V4 — Temporary)
+
+Vault CRM features (contact lookup, auto-match, post-call summary push) are disabled when `VAULT_API_TOKEN` is not set.
+
+**What's disabled:**
+- Contact auto-matching (both Vault active call API and calendar→Vault lookup)
+- Post-call AI summary generation and push to CRM
+- Manual contact search against Vault
+
+**What still works:**
+- Live transcription
+- AI coaching (LLM still generates coaching from transcript)
+- Smart coaching triggers
+- Google Calendar integration (events display, but attendees aren't looked up in Vault)
+
+**To re-enable:** Set `VAULT_API_TOKEN=your-token` in `.env` or the environment. All Vault features will resume automatically.
+
+**Files guarded:**
+- `src/features/vault/vaultService.js` — `lookupContact()` returns null early
+- `src/features/contactMatch/contactMatchService.js` — `autoMatch()` returns null early
+- `src/features/listen/summary/postCallSummaryService.js` — `generateAndPush()` returns early
+- `src/bridge/featureBridge.js` — Done button skips summary when token empty
+
 ## Note: SystemAudioDump Binary Bypassed (V3)
 
 The upstream Glass app shipped with a native binary (`src/ui/assets/SystemAudioDump`) for capturing system audio via CoreAudio. This binary is ad-hoc signed and gets killed by Shopify's MDM policy (Gatekeeper blocks unsigned/ad-hoc binaries).

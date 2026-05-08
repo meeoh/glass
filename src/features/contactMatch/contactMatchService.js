@@ -54,6 +54,10 @@ class ContactMatchService extends EventEmitter {
      * Returns the matched contact data or null.
      */
     async autoMatch() {
+        if (!VAULT_API_TOKEN) {
+            console.log('[ContactMatch] Vault API token not configured, skipping auto-match.');
+            return null;
+        }
         if (this._isMatching) {
             console.log('[ContactMatch] Already matching, skipping');
             return null;

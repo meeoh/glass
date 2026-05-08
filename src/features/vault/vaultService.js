@@ -18,6 +18,10 @@ class VaultService {
      * @returns {object|null} Full contact data or null if not found
      */
     async lookupContact({ email, name }) {
+        if (!VAULT_API_TOKEN) {
+            console.log('[VaultService] Vault API token not configured, skipping lookup.');
+            return null;
+        }
         const query = email
             ? `email=${encodeURIComponent(email.trim())}`
             : `name=${encodeURIComponent(name.trim())}`;

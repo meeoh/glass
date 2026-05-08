@@ -137,7 +137,7 @@ module.exports = {
           const finalHistory = conversationHistory.length > 0 ? conversationHistory : (listenService._stashedConversationHistory || []);
           const sendSummary = _sendSummary !== false; // reads from ListenView checkbox state
 
-          if (sendSummary) {
+          if (sendSummary && process.env.VAULT_API_TOKEN) {
             // Capture contact/match data NOW before we clear it
             const calendarService = require('../features/calendar/calendarService');
             const currentEvents = calendarService.getCurrentEvents();
