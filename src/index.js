@@ -279,6 +279,15 @@ app.whenReady().then(async () => {
         console.log('>>> [index.js] Call detection started.');
         callDetectionService.on('call-started', async () => {
             console.log('[index.js] 📞 Call detected — auto-starting listen session');
+
+            // Check mic permission before attempting to listen
+            const { systemPreferences } = require('electron');
+            const micStatus = systemPreferences.getMediaAccessStatus('microphone');
+            if (micStatus !== 'granted') {
+                console.log(`[index.js] ⚠️ Mic permission is '${micStatus}' — skipping auto-start. User must grant permission first.`);
+                return;
+            }
+
             try {
                 // Show the HUD overlay
                 showHUD();

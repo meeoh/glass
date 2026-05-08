@@ -32,9 +32,12 @@ extraResources:
       to: out
 
 asarUnpack:
+    - "src/native/MicWatcher"
+    - "src/native/MicWatcher.swift"
     - "src/ui/assets/SystemAudioDump"
     - "**/node_modules/sharp/**/*"
     - "**/node_modules/@img/**/*"
+    - "**/node_modules/better-sqlite3/**/*"
 
 # Windows configuration
 win:
